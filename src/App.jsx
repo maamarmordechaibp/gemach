@@ -33,10 +33,10 @@
       return (
         <>
           <Helmet>
-            <title>Check Cashing Service</title>
-            <meta name="description" content="A comprehensive check cashing and financial services application." />
-            <meta property="og:title" content="Check Cashing Service" />
-            <meta property="og:description" content="A comprehensive check cashing and financial services application." />
+            <title>Keren Meair Vesure</title>
+            <meta name="description" content="Keren Meair Vesure - Financial services management system." />
+            <meta property="og:title" content="Keren Meair Vesure" />
+            <meta property="og:description" content="Keren Meair Vesure - Financial services management system." />
           </Helmet>
           <ThemeProvider>
             {authLoading ? (
