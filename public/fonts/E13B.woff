@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Printable US Checks</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap" rel="stylesheet">
+
+<style>
+    body {
+        font-family: 'Times New Roman', serif;
+        background-color: #f0f0f0;
+        margin: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        align-items: center;
+        color: #333;
+    }
+
+    .check-container {
+        width: 8.5in;
+        height: 3.2in; /* Increased height to prevent cutoff */
+        background-color: #fff;
+        padding: 15px 25px;
+        border: 1px solid #ccc;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+        display: grid;
+        grid-template-columns: 2fr 1.5fr;
+        grid-template-rows: auto auto 1fr auto auto;
+        gap: 0px 15px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .header-left {
+        grid-column: 1 / 2;
+        grid-row: 1 / 2;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        font-size: 0.8em;
+        line-height: 1.2;
+        margin-bottom: 5px;
+    }
+
+    .header-left .name {
+        font-weight: bold;
+        font-size: 1.1em;
+        margin-bottom: 2px;
+    }
+
+    .header-right {
+        grid-column: 2 / 3;
+        grid-row: 1 / 2;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        font-size: 0.9em;
+        position: relative;
+        top: 0px;
+    }
+
+    .check-number {
+        position: absolute;
+        top: 5px;
+        right: 0;
+        font-weight: bold;
+        font-size: 1.1em;
+    }
+
+    .date-field {
+        position: absolute;
+        top: 30px;
+        right: 0;
+        display: flex;
+        align-items: center;
+    }
+    .date-field span { margin-right: 5px; }
+
+    .bank-logo-placeholder {
+        position: absolute;
+        top: 15px;
+        left: 200px;
+        font-weight: bold;
+        font-size: 1.2em;
+        color: #666;
+    }
+
+    .main-body-row {
+        grid-column: 1 / 3;
+        grid-row: 2 / 3;
+        display: grid;
+        grid-template-columns: 4fr 1fr;
+        gap: 5px;
+        align-items: baseline;
+        margin-top: 25px;
+        position: relative;
+    }
+
+    .pay-order-line {
+        display: flex;
+        align-items: baseline;
+        font-size: 1.1em;
+        margin-bottom: 10px;
+        grid-column: 1 / 2;
+    }
+    .pay-order-line span {
+        white-space: nowrap;
+        margin-right: 8px;
+        font-weight: bold;
+        width: 120px;
+    }
+    .pay-order-line input {
+        flex-grow: 1;
+        font-size: 1.2em;
+        padding-bottom: 2px;
+    }
+
+    .amount-box {
+        grid-column: 2 / 3;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        border: 2px solid #000;
+        padding: 3px 8px;
+        font-size: 1.3em;
+        font-weight: bold;
+        height: 28px;
+        line-height: 1;
+    }
+    .amount-box span { margin-right: 3px; }
+    .amount-box input {
+        border: none;
+        width: 90px;
+        text-align: right;
+        font-size: 1em;
+        font-weight: bold;
+    }
+
+    .amount-words-line {
+        grid-column: 1 / 3;
+        font-size: 1.1em;
+        border-bottom: 1px solid #000;
+        padding: 5px 0;
+        min-height: 1.5em;
+        font-style: normal;
+        display: flex;
+        align-items: flex-end;
+    }
+    .amount-words-line::after {
+        content: "DOLLARS";
+        margin-left: auto;
+        font-weight: bold;
+        font-size: 0.9em;
+        white-space: nowrap;
+    }
+
+    .bank-info {
+        grid-column: 1 / 2;
+        grid-row: 3 / 4;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-end;
+        font-size: 0.8em;
+        line-height: 1.2;
+        margin-top: 5px;
+        margin-bottom: 5px;
+    }
+
+    .bank-info .bank-name {
+        font-weight: bold;
+        font-size: 1.1em;
+    }
+
+    .memo-line {
+        grid-column: 1 / 2;
+        grid-row: 4 / 5;
+        display: flex;
+        align-items: center;
+        font-size: 0.85em;
+        margin-top: 5px;
+    }
+    .memo-line span { margin-right: 5px; }
+    .memo-line input {
+        flex-grow: 1;
+        border: none;
+        border-bottom: 1px solid #000;
+        padding: 2px 0;
+        background-color: transparent;
+    }
+
+    .signature-line {
+        grid-column: 2 / 3;
+        grid-row: 4 / 5;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        justify-content: flex-end;
+        margin-top: 5px;
+        position: relative;
+    }
+    .signature-line .line {
+        border-bottom: 1px solid #000;
+        width: 180px;
+        margin-bottom: 3px;
+    }
+    .signature-line .label {
+        font-size: 0.75em;
+        margin-right: 20px;
+    }
+
+    .micr-line {
+        grid-column: 1 / 3;
+        grid-row: 5 / 6;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        margin-top: 10px;
+        padding-top: 5px;
+        font-family: 'MICR E13B', 'Roboto Mono', monospace;
+        font-size: 1.1em;
+        height: 25px;
+        overflow: hidden;
+    }
+
+    .micr-line div {
+        display: flex;
+        align-items: flex-end;
+        white-space: nowrap;
+    }
+    .micr-line input {
+        border: none;
+        padding: 0;
+        text-align: center;
+        font-family: 'MICR E13B', 'Roboto Mono', monospace;
+        font-size: 1em;
+        background-color: transparent;
+    }
+    .micr-routing { width: 150px; }
+    .micr-account { width: 200px; }
+    .micr-check { width: 80px; }
+
+    input[type="text"] {
+        border: none;
+        border-bottom: 1px solid #000;
+        padding: 2px 0;
+        font-size: 1em;
+        width: 100%;
+        background-color: transparent;
+        outline: none;
+    }
+
+    @media print {
+        body {
+            background-color: #fff;
+            margin: 0;
+            padding: 0;
+        }
+
+        .check-container {
+            box-shadow: none;
+            border: 1px solid #000;
+            margin: 0;
+            page-break-after: avoid;
+        }
+    }
+</style>
+</head>
+<body>
+
+<div class="check-container">
+    <div class="header-left">
+        <div class="name"><input type="text" value="YOUR NAME" style="width:150px; font-weight: bold; border:none;"/></div>
+        <div><input type="text" value="Your Street Address" style="width:200px; border:none;"/></div>
+        <div><input type="text" value="City, State, Zip Code" style="width:200px; border:none;"/></div>
+    </div>
+    <div class="bank-logo-placeholder">YOUR BANK NAME / LOGO</div>
+    <div class="header-right">
+        <div class="check-number"><input type="text" class="short-input" value="101" style="width:40px; text-align:right;"/></div>
+        <div class="date-field"><span>DATE</span> <input type="text" class="short-input" placeholder="MM/DD/YYYY" style="width:90px;"/></div>
+    </div>
+
+    <div class="main-body-row">
+        <div class="pay-order-line">
+            <span>Pay to the order of</span>
+            <input type="text" placeholder="Payee Name">
+        </div>
+        <div class="amount-box"><span>$</span> <input type="text" class="amount-input" placeholder="0.00"></div>
+        <div class="amount-words-line"></div> 
+    </div>
+
+    <div class="bank-info">
+        <div class="bank-name"><input type="text" value="YOUR BANK NAME" style="width:200px; font-weight: bold; border:none;"/></div>
+        <div><input type="text" value="Bank Street Address" style="width:200px; border:none;"/></div>
+        <div><input type="text" value="City, State, Zip Code" style="width:200px; border:none;"/></div>
+    </div>
+
+    <div class="memo-line">
+        <span>MEMO</span>
+        <input type="text" placeholder="For:">
+    </div>
+
+    <div class="signature-line">
+        <div class="line"></div>
+        <div class="label">Authorized Signature</div>
+    </div>
+
+    <div class="micr-line">
+        <input type="text" class="micr-input micr-routing" placeholder="A:000000000A" value="A:123456789A">
+        <input type="text" class="micr-input micr-account" placeholder="B:0000000000B" value="B:9876543210B">
+        <input type="text" class="micr-input micr-check" placeholder="C:0000C" value="C:0101C">
+    </div>
+</div>
+
+<div class="check-container">
+    <div class="header-left">
+        <div class="name"><input type="text" value="YOUR NAME" style="width:150px; font-weight: bold; border:none;"/></div>
+        <div><input type="text" value="Your Street Address" style="width:200px; border:none;"/></div>
+        <div><input type="text" value="City, State, Zip Code" style="width:200px; border:none;"/></div>
+    </div>
+    <div class="bank-logo-placeholder">YOUR BANK NAME / LOGO</div>
+    <div class="header-right">
+        <div class="check-number"><input type="text" class="short-input" value="102" style="width:40px; text-align:right;"/></div>
+        <div class="date-field"><span>DATE</span> <input type="text" class="short-input" placeholder="MM/DD/YYYY" style="width:90px;"/></div>
+    </div>
+
+    <div class="main-body-row">
+        <div class="pay-order-line">
+            <span>Pay to the order of</span>
+            <input type="text" placeholder="Payee Name">
+        </div>
+        <div class="amount-box"><span>$</span> <input type="text" class="amount-input" placeholder="0.00"></div>
+        <div class="amount-words-line"></div> 
+    </div>
+
+    <div class="bank-info">
+        <div class="bank-name"><input type="text" value="YOUR BANK NAME" style="width:200px; font-weight: bold; border:none;"/></div>
+        <div><input type="text" value="Bank Street Address" style="width:200px; border:none;"/></div>
+        <div><input type="text" value="City, State, Zip Code" style="width:200px; border:none;"/></div>
+    </div>
+
+    <div class="memo-line">
+        <span>MEMO</span>
+        <input type="text" placeholder="For:">
+    </div>
+
+    <div class="signature-line">
+        <div class="line"></div>
+        <div class="label">Authorized Signature</div>
+    </div>
+
+    <div class="micr-line">
+        <input type="text" class="micr-input micr-routing" placeholder="A:000000000A" value="A:123456789A">
+        <input type="text" class="micr-input micr-account" placeholder="B:0000000000B" value="B:9876543210B">
+        <input type="text" class="micr-input micr-check" placeholder="C:0000C" value="C:0102C">
+    </div>
+</div>
+
+<script>
+// JavaScript for converting numbers to words and populating fields
+const numberToWords = (num) => {
+    if (isNaN(num) || num === null) return '';
+    num = parseFloat(num.toFixed(2));
+
+    const a = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+    const b = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+    const convertLessThanOneThousand = (n) => {
+        let s = '';
+        if (n < 20) {
+            s += a[n];
+        } else if (n < 100) {
+            s += b[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + a[n % 10] : '');
+        } else {
+            s += a[Math.floor(n / 100)] + ' hundred' + (n % 100 !== 0 ? ' ' + convertLessThanOneThousand(n % 100) : '');
+        }
+        return s;
+    };
+
+    if (num === 0) return 'Zero';
+    if (num < 0) return 'Minus ' + numberToWords(-num);
+
+    let output = '';
+    let dollars = Math.floor(num);
+    let cents = Math.round((num - dollars) * 100);
+
+    if (dollars > 0) {
+        output += convertLessThanOneThousand(dollars).trim();
+    }
+
+    if (cents > 0) {
+        if (dollars > 0) {
+            output += ' and ' + cents + '/100';
+        } else {
+            output += cents + '/100';
+        }
+    } else {
+        if (dollars > 0) {
+            output += ' and 00/100';
+        } else {
+            output += '00/100';
+        }
+    }
+
+    return output.charAt(0).toUpperCase() + output.slice(1).toLowerCase();
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const checkContainers = document.querySelectorAll('.check-container');
+
+    checkContainers.forEach(container => {
+        const amountInput = container.querySelector('.amount-input');
+        const amountWordsLine = container.querySelector('.amount-words-line');
+        const checkNumberInput = container.querySelector('.check-number input');
+        const micrCheckNumberInput = container.querySelector('.micr-check');
+        const dateInput = container.querySelector('.date-field input');
+
+        const today = new Date();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const yyyy = today.getFullYear();
+        if (!dateInput.value) {
+            dateInput.value = `${mm}/${dd}/${yyyy}`;
+        }
+
+        checkNumberInput.addEventListener('input', () => {
+            micrCheckNumberInput.value = `C:${checkNumberInput.value.padStart(4, '0')}C`;
+        });
+
+        if (checkNumberInput.value) {
+            micrCheckNumberInput.value = `C:${checkNumberInput.value.padStart(4, '0')}C`;
+        }
+
+        amountInput.addEventListener('input', () => {
+            const value = parseFloat(amountInput.value);
+            if (!isNaN(value)) {
+                amountWordsLine.textContent = numberToWords(value);
+            } else {
+                amountWordsLine.textContent = '';
+            }
+        });
+
+        if (amountInput.value) {
+            const value = parseFloat(amountInput.value);
+            if (!isNaN(value)) {
+                amountWordsLine.textContent = numberToWords(value);
+            }
+        }
+    });
+});
+</script>
+
+</body>
+</html>

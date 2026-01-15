@@ -1,0 +1,2 @@
+## Pages
+- [Check Cashing Service](/): A comprehensive check cashing and financial services application.
