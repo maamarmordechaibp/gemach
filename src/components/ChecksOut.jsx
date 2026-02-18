@@ -325,20 +325,17 @@ const ChecksOut = () => {
 
     return (
         <div className="space-y-6">
-            {isPrinting && checksToPrint.length > 0 && (
-                <div className="print-component" style={{ 
-                    background: 'white', 
-                    color: 'black', 
-                    position: 'fixed', 
-                    top: '-9999px', 
-                    left: '-9999px',
-                    width: '8.5in',
-                    zIndex: 9999
-                }}>
-                    {/* Always render CheckDocument - it handles missing data internally */}
-                    <CheckDocument ref={componentToPrintRef} checks={checksToPrint} config={settings.check_config} />
-                </div>
-            )}
+            <div className="print-component" style={{ 
+                background: 'white', 
+                color: 'black', 
+                position: 'fixed', 
+                top: '-9999px', 
+                left: '-9999px',
+                width: '8.5in',
+                zIndex: 9999
+            }}>
+                <CheckDocument ref={componentToPrintRef} checks={checksToPrint} config={settings?.check_config} />
+            </div>
             
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="flex-1 min-w-0">

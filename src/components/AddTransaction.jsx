@@ -92,12 +92,7 @@ const AddTransaction = () => {
 
     if (prospectiveBalance < 0) {
       const shortfall = Math.abs(prospectiveBalance);
-      const action = () => setLoanPrompt({ show: true, shortfall, dueDate: '', loanOption: 'shortfall' });
-      if (isAdmin) {
-        action();
-      } else {
-        setPasswordDialog({ show: true, onConfirm: action });
-      }
+      setLoanPrompt({ show: true, shortfall, dueDate: '', loanOption: 'shortfall' });
       return;
     }
 
