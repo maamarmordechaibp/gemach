@@ -250,34 +250,11 @@ const ChecksOut = () => {
         if (selectedChecks.size > 0) {
             setIsPrinting(true);
             
-            // First refresh data to ensure we have latest from database
+            // Refresh data to ensure we have latest from database
             await refreshData();
             
-            // Wait for state update and component re-render
+            // Wait for state update and component re-render, then print
             setTimeout(() => {
-                // Validate we have payee data before printing
-                const checksToValidate = unprintedChecks.filter(c => selectedChecks.has(c.id));
-                const hasAllPayeeData = checksToValidate.every(check => 
-                    check.pay_to_order_of && check.pay_to_order_of.trim() !== ''
-                );
-                
-                console.log('Print validation:', {
-                    checksToValidate: checksToValidate.length,
-                    hasAllPayeeData,
-                    payeeData: checksToValidate.map(c => ({ id: c.id, payee: c.pay_to_order_of }))
-                });
-                
-                if (!hasAllPayeeData) {
-                    toast({ 
-                        title: 'Missing Data', 
-                        description: 'Some checks are missing payee information. Please refresh and try again.', 
-                        variant: 'destructive' 
-                    });
-                    setIsPrinting(false);
-                    return;
-                }
-                
-                // Proceed with print
                 handlePrint();
             }, 500);
         }
@@ -300,27 +277,6 @@ const ChecksOut = () => {
     };
 
     const checksToPrint = unprintedChecks.filter(c => selectedChecks.has(c.id));
-    
-    // Debug: Log the actual check data being sent to print with detailed payee info
-    console.log('Debug - checksToPrint data:', checksToPrint);
-    console.log('Debug - checksToPrint pay_to_order_of values:', checksToPrint.map(c => ({ 
-        id: c.id, 
-        check_number: c.check_number, 
-        pay_to_order_of: c.pay_to_order_of,
-        amount: c.amount,
-        account_number: c.account_number
-    })));
-    
-    // Debug: Also log the raw checksOut data to see if issue is in filtering
-    console.log('Debug - Raw checksOut data for selected checks:', 
-        checksOut.filter(c => selectedChecks.has(c.id)).map(c => ({ 
-            id: c.id, 
-            check_number: c.check_number, 
-            pay_to_order_of: c.pay_to_order_of,
-            amount: c.amount 
-        }))
-    );
-
     const reprintFeeAmount = settings?.transaction_fees?.check_reprint?.fee;
 
     return (

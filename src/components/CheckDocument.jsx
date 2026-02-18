@@ -9,16 +9,6 @@
         // Use the same font for MICR since there's only one font upload in settings
         const micrFontUrl = config?.font_url;
         
-        // Debug: Log what data CheckDocument receives
-        console.log('CheckDocument received checks:', checks);
-        console.log('CheckDocument received config:', config);
-        console.log('CheckDocument checks payee data:', checks?.map(c => ({ 
-            id: c.id, 
-            check_number: c.check_number, 
-            pay_to_order_of: c.pay_to_order_of,
-            amount: c.amount 
-        })));
-
         // Number to words for check amount
         const numberToWords = (numStr) => {
             const num = parseFloat(numStr);
@@ -81,17 +71,6 @@
             const checkNumber = String(checkData.check_number || '0000').padStart(4, '0');
             const date = new Date(checkData.date).toLocaleDateString();
             
-            // Debug log for print rendering
-            console.log(`CheckDocument rendering check ${checkNumber}:`, {
-                payToOrderOf,
-                amount,
-                amountInWords,
-                accountNumber,
-                memoText,
-                date,
-                customer,
-                checkData
-            });
             // MICR line: use config for routing/account, check number from data
             const micrRouting = config?.routing_number || '123456789';
             const micrAccount = config?.account_number || '1122334455';
