@@ -1,14 +1,12 @@
 
     
-import React, { useState, useMemo, useRef } from 'react';
-import { useReactToPrint } from 'react-to-print';
+import React, { useState, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
 import UnprintedChecksTable from '@/components/checks-out/UnprintedChecksTable';
 import CheckHistoryTable from '@/components/checks-out/CheckHistoryTable';
-import CheckDocument from '@/components/CheckDocument';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -43,9 +41,6 @@ const ChecksOut = () => {
     const [voidingId, setVoidingId] = useState(null);
     const [reprintDialogOpen, setReprintDialogOpen] = useState(false);
     const [checkToReprint, setCheckToReprint] = useState(null);
-    
-    const componentToPrintRef = useRef();
-    const [frozenChecksToPrint, setFrozenChecksToPrint] = useState([]);
 
     const unprintedChecks = useMemo(() => {
         const customerMap = new Map(customers.map(c => [c.account_number, `${c.first_name} ${c.last_name}`]));
@@ -221,37 +216,154 @@ const ChecksOut = () => {
         refreshData();
         setIsPrinting(false);
     };
-    
-    const handlePrint = useReactToPrint({
-        content: () => componentToPrintRef.current,
-        onAfterPrint: () => {
-            const printedIds = Array.from(selectedChecks);
-            if (printedIds.length > 0) {
-               handlePrintSuccess(printedIds);
-            } else {
-               setIsPrinting(false);
-            }
-            setFrozenChecksToPrint([]);
-        },
-        onPrintError: () => {
-            toast({ title: 'Print Error', description: 'There was an error generating the print document.', variant: 'destructive' });
-            setIsPrinting(false);
-            setFrozenChecksToPrint([]);
-        },
-    });
-    
-    const triggerPrint = async () => {
-        if (selectedChecks.size > 0) {
-            // Freeze the checks data before printing so refreshData can't clear it
-            const checksToFreeze = unprintedChecks.filter(c => selectedChecks.has(c.id));
-            setFrozenChecksToPrint(checksToFreeze);
-            setIsPrinting(true);
-            
-            // Wait for frozen state to render, then print
-            setTimeout(() => {
-                handlePrint();
-            }, 500);
+
+    // Number to words helper
+    const numberToWords = (numStr) => {
+        const num = parseFloat(numStr);
+        if (isNaN(num)) return '';
+        const ones = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+            'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+            'seventeen', 'eighteen', 'nineteen'];
+        const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+        function convertGroup(n) {
+            let result = '';
+            if (n >= 100) { result += ones[Math.floor(n / 100)] + ' hundred '; n %= 100; }
+            if (n >= 20) { result += tens[Math.floor(n / 10)]; if (n % 10 > 0) result += '-' + ones[n % 10]; }
+            else if (n > 0) { result += ones[n]; }
+            return result.trim();
         }
+        let dollars = Math.floor(num);
+        let cents = Math.round((num - dollars) * 100);
+        let result = '';
+        if (dollars >= 1000000) { result += convertGroup(Math.floor(dollars / 1000000)) + ' million '; dollars %= 1000000; }
+        if (dollars >= 1000) { result += convertGroup(Math.floor(dollars / 1000)) + ' thousand '; dollars %= 1000; }
+        if (dollars > 0) { result += convertGroup(dollars); }
+        if (result === '') result = 'zero';
+        result += ' and ' + cents.toString().padStart(2, '0') + '/100';
+        return result.charAt(0).toUpperCase() + result.slice(1);
+    };
+
+    // Build check HTML for a single check
+    const buildCheckHtml = (checkData) => {
+        const config = settings?.check_config || {};
+        const accountName = config.name || 'ACCOUNT NAME';
+        const payToOrderOf = (checkData.pay_to_order_of || '').trim();
+        const memoText = checkData.account_number || '';
+        const amount = parseFloat(checkData.amount || 0).toFixed(2);
+        const amountInWords = numberToWords(checkData.amount || 0);
+        const checkNumber = String(checkData.check_number || '0000').padStart(4, '0');
+        const date = new Date(checkData.date).toLocaleDateString();
+        const micrRouting = config.routing_number || '123456789';
+        const micrAccount = config.account_number || '1122334455';
+        const micrLine = `⑆${micrRouting}⑆ ⑈${micrAccount}⑈ ⑈${checkNumber}⑈`;
+
+        return `
+            <div class="check-container">
+                <div class="account-name">${accountName}</div>
+                <div class="phone-number">${config.phone_number || ''}</div>
+                <div class="check-number">No. ${checkNumber}</div>
+                <div class="account-address">${config.address1 || ''}<br>${config.address2 || ''}</div>
+                <div class="date-line">Date <span>${date}</span></div>
+                <div class="payee-line">
+                    <span class="payee-label">Pay to the order of</span>
+                    <span class="payee-input">${payToOrderOf}</span>
+                </div>
+                <div class="amount-box">$${amount}</div>
+                <div class="amount-words">
+                    <span class="amount-text">${amountInWords}</span>
+                    <span class="dollars-text">DOLLARS</span>
+                </div>
+                <div class="bank-info">
+                    <div class="bank-name">${config.bank_name || ''}</div>
+                    <div class="bank-address">${config.bank_address || ''}</div>
+                </div>
+                <div class="memo-signature">
+                    <div class="memo">
+                        <span class="memo-label">Memo</span>
+                        <span class="memo-input">${memoText}</span>
+                    </div>
+                    <div class="signature">
+                        <div class="signature-line"></div>
+                        <div class="signature-label">Authorized Signature</div>
+                    </div>
+                </div>
+                <div class="micr-line">${micrLine}</div>
+            </div>`;
+    };
+
+    const triggerPrint = () => {
+        if (selectedChecks.size === 0) return;
+        setIsPrinting(true);
+
+        const checksToPrint = unprintedChecks.filter(c => selectedChecks.has(c.id));
+        if (checksToPrint.length === 0) {
+            setIsPrinting(false);
+            return;
+        }
+
+        const config = settings?.check_config || {};
+        const fontUrl = config.font_url;
+        const checksHtml = checksToPrint.map(c => buildCheckHtml(c)).join('');
+
+        const printWindow = window.open('', '_blank', 'width=900,height=700');
+        if (!printWindow) {
+            toast({ title: 'Popup Blocked', description: 'Please allow popups for this site to print checks.', variant: 'destructive' });
+            setIsPrinting(false);
+            return;
+        }
+
+        printWindow.document.write(`<!DOCTYPE html>
+<html><head><title>Print Checks</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+${fontUrl ? `@font-face { font-family: 'customCheckFont'; src: url('${fontUrl}') format('woff'); font-display: swap; }` : ''}
+${fontUrl ? `@font-face { font-family: 'customMicrFont'; src: url('${fontUrl}') format('woff'); font-display: swap; }` : ''}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: white; margin: 0; padding: 0.25in; }
+.check-container { width: 8.5in; height: 3.5in; background: white; border: 1px solid #2c5f8d; padding: 0.35in 0.4in 0.25in 0.4in; position: relative; margin-bottom: 0.3in; page-break-inside: avoid; font-family: 'Roboto', Arial, sans-serif; }
+.check-container::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #1e4d72 0%, #2c5f8d 50%, #1e4d72 100%); }
+.account-name { position: absolute; top: 0.45in; left: 0.4in; font-size: 15pt; font-weight: 700; color: #1a1a1a; letter-spacing: 0.3px; text-transform: uppercase; }
+.phone-number { position: absolute; top: 0.7in; left: 0.4in; font-size: 9pt; color: #444; }
+.check-number { position: absolute; top: 0.42in; right: 0.4in; text-align: right; font-size: 18pt; font-weight: 700; color: #1e4d72; letter-spacing: 1px; }
+.account-address { position: absolute; top: 0.9in; left: 0.4in; font-size: 9pt; color: #444; line-height: 1.4; }
+.date-line { position: absolute; top: 0.68in; right: 0.4in; text-align: right; font-size: 10pt; color: #1a1a1a; font-weight: 500; }
+.date-line span { display: inline-block; min-width: 1.2in; border-bottom: 1px solid #333; padding: 0 4px 2px 4px; margin-left: 6px; }
+.payee-line { position: absolute; top: 1.35in; left: 0.4in; right: 1.6in; display: flex; align-items: baseline; font-size: 11pt; }
+.payee-label { font-weight: 600; color: #1a1a1a; white-space: nowrap; margin-right: 8px; font-size: 10pt; }
+.payee-input { flex: 1; border-bottom: 1px solid #333; font-size: 12pt; color: #000; font-weight: 500; padding: 0 4px 3px 4px; }
+.amount-box { position: absolute; top: 1.32in; right: 0.4in; width: 1.35in; height: 0.32in; display: flex; align-items: center; justify-content: flex-end; border: 2px solid #1e4d72; background: #f8f9fa; padding: 0 10px; font-size: 15pt; font-weight: 700; color: #000; font-family: 'Roboto Mono', monospace; }
+.amount-words { position: absolute; top: 1.75in; left: 0.4in; right: 0.4in; font-size: 10pt; border-bottom: 1px solid #333; min-height: 0.25in; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 4px 3px 4px; color: #000; }
+.amount-text { flex: 1; color: #000; font-weight: 500; text-transform: capitalize; }
+.dollars-text { font-weight: 700; color: #000; font-size: 10pt; margin-left: 8px; }
+.bank-info { position: absolute; top: 2.15in; left: 0.4in; right: 3.5in; font-size: 10pt; color: #1a1a1a; line-height: 1.5; }
+.bank-name { font-weight: 700; font-size: 11pt; color: #1e4d72; text-transform: uppercase; letter-spacing: 0.3px; }
+.bank-address { font-size: 9pt; margin-top: 2px; color: #444; }
+.memo-signature { position: absolute; top: 2.15in; left: 0.4in; right: 0.4in; display: grid; grid-template-columns: 2.2in 1fr; gap: 0.5in; }
+.memo { display: flex; align-items: baseline; font-size: 9pt; }
+.memo-label { font-weight: 600; color: #1a1a1a; margin-right: 6px; }
+.memo-input { flex: 1; border-bottom: 1px solid #333; font-size: 9pt; padding: 0 4px 2px 4px; color: #000; max-width: 2in; }
+.signature { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; }
+.signature-line { border-bottom: 1.5px solid #333; width: 100%; max-width: 2.8in; height: 0.35in; margin-bottom: 2px; }
+.signature-label { font-size: 8pt; color: #666; text-align: right; width: 100%; max-width: 2.8in; }
+.micr-line { position: absolute; bottom: 0.2in; left: 0.6in; right: 0.4in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', monospace; font-size: 13pt; letter-spacing: 1.5px; color: #000; line-height: 1; }
+@media print {
+  body { background: white; margin: 0; padding: 0.25in; }
+  .check-container { box-shadow: none; border: 1px solid #2c5f8d; page-break-inside: avoid; margin-bottom: 0.2in; background: white; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+</head><body>${checksHtml}</body></html>`);
+        printWindow.document.close();
+
+        // Wait for fonts to load, then print
+        setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+            // After print dialog closes, mark as printed
+            const printedIds = Array.from(selectedChecks);
+            handlePrintSuccess(printedIds);
+            setTimeout(() => printWindow.close(), 1000);
+        }, 1500);
     };
 
     const handleVoid = async (checkId, transactionId) => {
@@ -270,23 +382,10 @@ const ChecksOut = () => {
         }
     };
 
-    const checksToPrint = frozenChecksToPrint.length > 0 ? frozenChecksToPrint : unprintedChecks.filter(c => selectedChecks.has(c.id));
     const reprintFeeAmount = settings?.transaction_fees?.check_reprint?.fee;
 
     return (
         <div className="space-y-6">
-            <div style={{ 
-                background: 'white', 
-                color: 'black', 
-                position: 'fixed', 
-                top: '-9999px', 
-                left: '-9999px',
-                width: '8.5in',
-                zIndex: 9999
-            }}>
-                <CheckDocument ref={componentToPrintRef} checks={checksToPrint} config={settings?.check_config} />
-            </div>
-            
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="flex-1 min-w-0">
                 <h1 className="text-2xl font-bold text-foreground">Checks Out</h1>
