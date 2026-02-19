@@ -41,9 +41,9 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
                     .from('system_settings')
                     .select('value')
                     .eq('key', 'active_theme')
-                    .single();
+                    .maybeSingle();
                 
-                const currentThemeName = settingError ? 'Default' : settingData.value;
+                const currentThemeName = (settingError || !settingData) ? 'Default' : settingData.value;
                 setActiveThemeName(currentThemeName);
 
                 const activeTheme = (themeData || []).find(t => t.name === currentThemeName);

@@ -53,7 +53,7 @@ const ChecksOut = () => {
             .map(c => ({ ...c, customer_name: customerMap.get(c.account_number) || 'N/A' }))
             .filter(c =>
                 c.customer_name.toLowerCase().includes(unprintedSearchTerm.toLowerCase()) ||
-                c.pay_to_order_of.toLowerCase().includes(unprintedSearchTerm.toLowerCase()) ||
+                (c.pay_to_order_of || '').toLowerCase().includes(unprintedSearchTerm.toLowerCase()) ||
                 c.check_number.toString().includes(unprintedSearchTerm)
             );
     }, [checksOut, customers, unprintedSearchTerm]);
@@ -65,7 +65,7 @@ const ChecksOut = () => {
             .map(c => ({ ...c, customer_name: customerMap.get(c.account_number) || 'N/A' }))
              .filter(c =>
                 c.customer_name.toLowerCase().includes(historySearchTerm.toLowerCase()) ||
-                c.pay_to_order_of.toLowerCase().includes(historySearchTerm.toLowerCase()) ||
+                (c.pay_to_order_of || '').toLowerCase().includes(historySearchTerm.toLowerCase()) ||
                 c.check_number.toString().includes(historySearchTerm)
             )
             .sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -109,7 +109,6 @@ const ChecksOut = () => {
             const customerName = customer ? `${customer.first_name} ${customer.last_name}` : check.account_number;
             const reprintMemo = `Reprint fee for check #${checkNum} - ${customerName}`;
             
-            console.log(`Debug - Creating reprint fee transaction: ${feeTxId} for $${feeAmount}`);
             const { error: feeError } = await supabase.from('transactions').insert({
                 id: feeTxId,
                 account_number: check.account_number,
@@ -132,21 +131,18 @@ const ChecksOut = () => {
 
             if (feeError) throw feeError;
 
-            console.log(`Debug - Deducting reprint fee of $${feeAmount} from customer ${check.account_number}`);
             const { error: customerUpdateError } = await supabase.rpc('execute_sql', {
                 sql: `UPDATE customers SET balance = balance - ${feeAmount} WHERE account_number = '${check.account_number}';`
             });
 
             if (customerUpdateError) throw customerUpdateError;
             
-            console.log(`Debug - Adding reprint fee of $${feeAmount} to FEES account`);
             const { error: feeAccountError } = await supabase.rpc('execute_sql', {
                 sql: `UPDATE customers SET balance = balance + ${feeAmount} WHERE account_number = 'FEES';`
             });
 
             if(feeAccountError) throw feeAccountError;
 
-            console.log(`Debug - Successfully added reprint fee of $${feeAmount} to FEES account`);
             toast({ title: "Reprint Fee Applied", description: `A fee of $${feeAmount.toFixed(2)} has been charged to ${customerName}.` });
             return true;
         } catch (error) {
