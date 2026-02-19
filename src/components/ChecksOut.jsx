@@ -255,7 +255,7 @@ const ChecksOut = () => {
         const date = new Date(checkData.date).toLocaleDateString();
         const micrRouting = config.routing_number || '123456789';
         const micrAccount = config.account_number || '1122334455';
-        const micrLine = `⑆${micrRouting}⑆ ⑈${micrAccount}⑈ ⑈${checkNumber}⑈`;
+        const micrLine = `C${micrRouting}C ${micrAccount}C ${checkNumber}C`;
 
         return `
             <div class="check-container">
@@ -335,17 +335,17 @@ body { background: white; margin: 0; padding: 0.25in; }
 .amount-words { position: absolute; top: 1.75in; left: 0.4in; right: 0.4in; font-size: 10pt; border-bottom: 1px solid #333; min-height: 0.25in; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 4px 3px 4px; color: #000; }
 .amount-text { flex: 1; color: #000; font-weight: 500; text-transform: capitalize; }
 .dollars-text { font-weight: 700; color: #000; font-size: 10pt; margin-left: 8px; }
-.bank-info { position: absolute; top: 2.15in; left: 0.4in; right: 3.5in; font-size: 10pt; color: #1a1a1a; line-height: 1.5; }
+.bank-info { position: absolute; top: 2.1in; left: 0.4in; right: 3.5in; font-size: 10pt; color: #1a1a1a; line-height: 1.4; }
 .bank-name { font-weight: 700; font-size: 11pt; color: #1e4d72; text-transform: uppercase; letter-spacing: 0.3px; }
 .bank-address { font-size: 9pt; margin-top: 2px; color: #444; }
-.memo-signature { position: absolute; top: 2.15in; left: 0.4in; right: 0.4in; display: grid; grid-template-columns: 2.2in 1fr; gap: 0.5in; }
+.memo-signature { position: absolute; top: 2.65in; left: 0.4in; right: 0.4in; display: grid; grid-template-columns: 2.2in 1fr; gap: 0.5in; }
 .memo { display: flex; align-items: baseline; font-size: 9pt; }
 .memo-label { font-weight: 600; color: #1a1a1a; margin-right: 6px; }
 .memo-input { flex: 1; border-bottom: 1px solid #333; font-size: 9pt; padding: 0 4px 2px 4px; color: #000; max-width: 2in; }
 .signature { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; }
 .signature-line { border-bottom: 1.5px solid #333; width: 100%; max-width: 2.8in; height: 0.35in; margin-bottom: 2px; }
 .signature-label { font-size: 8pt; color: #666; text-align: right; width: 100%; max-width: 2.8in; }
-.micr-line { position: absolute; bottom: 0.2in; left: 0.6in; right: 0.4in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', monospace; font-size: 13pt; letter-spacing: 1.5px; color: #000; line-height: 1; }
+.micr-line { position: absolute; bottom: 0.25in; left: 0.6in; right: 0.4in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', monospace; font-size: 12pt; letter-spacing: 2px; color: #000; line-height: 1; }
 @media print {
   body { background: white; margin: 0; padding: 0.25in; }
   .check-container { box-shadow: none; border: 1px solid #2c5f8d; page-break-inside: avoid; margin-bottom: 0.2in; background: white; }
