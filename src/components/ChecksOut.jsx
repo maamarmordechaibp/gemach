@@ -45,6 +45,7 @@ const ChecksOut = () => {
     const [checkToReprint, setCheckToReprint] = useState(null);
     
     const componentToPrintRef = useRef();
+    const [frozenChecksToPrint, setFrozenChecksToPrint] = useState([]);
 
     const unprintedChecks = useMemo(() => {
         const customerMap = new Map(customers.map(c => [c.account_number, `${c.first_name} ${c.last_name}`]));
@@ -223,11 +224,6 @@ const ChecksOut = () => {
     
     const handlePrint = useReactToPrint({
         content: () => componentToPrintRef.current,
-        onBeforePrint: async () => {
-            // Force one final data refresh right before printing
-            await refreshData();
-            return Promise.resolve();
-        },
         onAfterPrint: () => {
             const printedIds = Array.from(selectedChecks);
             if (printedIds.length > 0) {
@@ -235,21 +231,23 @@ const ChecksOut = () => {
             } else {
                setIsPrinting(false);
             }
+            setFrozenChecksToPrint([]);
         },
         onPrintError: () => {
             toast({ title: 'Print Error', description: 'There was an error generating the print document.', variant: 'destructive' });
             setIsPrinting(false);
+            setFrozenChecksToPrint([]);
         },
     });
     
     const triggerPrint = async () => {
         if (selectedChecks.size > 0) {
+            // Freeze the checks data before printing so refreshData can't clear it
+            const checksToFreeze = unprintedChecks.filter(c => selectedChecks.has(c.id));
+            setFrozenChecksToPrint(checksToFreeze);
             setIsPrinting(true);
             
-            // Refresh data to ensure we have latest from database
-            await refreshData();
-            
-            // Wait for state update and component re-render, then print
+            // Wait for frozen state to render, then print
             setTimeout(() => {
                 handlePrint();
             }, 500);
@@ -272,12 +270,12 @@ const ChecksOut = () => {
         }
     };
 
-    const checksToPrint = unprintedChecks.filter(c => selectedChecks.has(c.id));
+    const checksToPrint = frozenChecksToPrint.length > 0 ? frozenChecksToPrint : unprintedChecks.filter(c => selectedChecks.has(c.id));
     const reprintFeeAmount = settings?.transaction_fees?.check_reprint?.fee;
 
     return (
         <div className="space-y-6">
-            <div className="print-component" style={{ 
+            <div style={{ 
                 background: 'white', 
                 color: 'black', 
                 position: 'fixed', 
