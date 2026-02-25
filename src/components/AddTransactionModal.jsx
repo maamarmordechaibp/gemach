@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Banknote, X, AlertTriangle, Loader2, CheckCircle2, DollarSign } from 'lucide-react';
+import { Banknote, X, AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useData } from '@/contexts/DataContext';
@@ -27,12 +27,46 @@ import {
 import { useTransactionLogic } from '@/hooks/useTransactionLogic';
 
 const AddTransactionModal = ({ isOpen, onClose, setActiveSection }) => {
-  const { customers, loans, refreshData } = useData();
+  const { customers, loans, refreshData, settings } = useData();
   const { isAdmin } = useAuth();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   
+  const printReceipt = (custName, acctNum, creditAmt, debitAmt, feeAmt, transferAmt, newBalance) => {
+    const companyInfo = settings?.check_config || {};
+    const now = new Date();
+    const receiptHtml = `<!DOCTYPE html><html><head><title>Receipt</title>
+<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:monospace;padding:20px;width:3in;color:#000;background:#fff;font-size:11px;}
+.center{text-align:center;}.line{border-bottom:1px dashed #000;margin:8px 0;}.row{display:flex;justify-content:space-between;padding:2px 0;}
+.bold{font-weight:bold;}.big{font-size:16px;}.mt{margin-top:8px;}@media print{body{padding:5px;margin:0;}}</style>
+</head><body>
+<div class="center">${companyInfo.name ? `<div class="bold big">${companyInfo.name}</div>` : ''}
+${companyInfo.address1 ? `<div>${companyInfo.address1}</div>` : ''}${companyInfo.phone_number ? `<div>${companyInfo.phone_number}</div>` : ''}
+</div>
+<div class="line"></div>
+<div class="center bold">TRANSACTION RECEIPT</div>
+<div class="center">${now.toLocaleDateString()} ${now.toLocaleTimeString()}</div>
+<div class="line"></div>
+<div class="row bold"><span>Customer:</span><span>${custName}</span></div>
+<div class="row"><span>Account:</span><span>${acctNum}</span></div>
+<div class="line"></div>
+${creditAmt > 0 ? `<div class="row"><span>Credit/Deposit:</span><span>+$${creditAmt.toFixed(2)}</span></div>` : ''}
+${debitAmt > 0 ? `<div class="row"><span>Debit/Withdrawal:</span><span>-$${debitAmt.toFixed(2)}</span></div>` : ''}
+${feeAmt > 0 ? `<div class="row"><span>Fees:</span><span>-$${feeAmt.toFixed(2)}</span></div>` : ''}
+${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transferAmt.toFixed(2)}</span></div>` : ''}
+<div class="line"></div>
+<div class="row bold big"><span>Balance:</span><span>$${newBalance.toFixed(2)}</span></div>
+<div class="line"></div>
+<div class="center mt">Thank you!</div>
+</body></html>`;
+    const w = window.open('', '_blank', 'width=350,height=500');
+    if (!w) return;
+    w.document.write(receiptHtml);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); setTimeout(() => w.close(), 1000); }, 400);
+  };
+
   const {
     transactionState,
     setTransactionState,
@@ -47,16 +81,17 @@ const AddTransactionModal = ({ isOpen, onClose, setActiveSection }) => {
       const fee = transactionState?.applyFee ? transactionFee : 0;
       const transferAmt = parseFloat(transactionState?.transferDetails?.amount) || 0;
       const newBalance = (parseFloat(selectedCustomer.balance) || 0) + totalCredit - totalDebit - fee - transferAmt;
-      setCompletedBalance(newBalance.toFixed(2));
-      setCompletedCustomerName(`${selectedCustomer.first_name} ${selectedCustomer.last_name}`);
+      printReceipt(
+        `${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
+        selectedCustomer.account_number,
+        totalCredit, totalDebit, fee, transferAmt, newBalance
+      );
     }
     setShowConfirmation(true);
   });
   
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [completedBalance, setCompletedBalance] = useState(null);
-  const [completedCustomerName, setCompletedCustomerName] = useState('');
   const [customerInitialData, setCustomerInitialData] = useState({});
   
   const [loanPrompt, setLoanPrompt] = useState({ show: false, shortfall: 0, dueDate: '', loanOption: 'shortfall' });
@@ -205,7 +240,7 @@ const AddTransactionModal = ({ isOpen, onClose, setActiveSection }) => {
               </div>
               {selectedCustomer && (
                 <div className="p-6 border-t border-border sticky bottom-0 bg-card">
-                  <TransactionSummary totalCredit={totalCredit} totalDebit={totalDebit} transactionFee={transactionFee} onProcess={handleProcessTransaction} isProcessing={isProcessing} />
+                  <TransactionSummary totalCredit={totalCredit} totalDebit={totalDebit} transactionFee={transactionFee} onProcess={handleProcessTransaction} isProcessing={isProcessing} customer={selectedCustomer} applyFee={transactionState?.applyFee} />
                 </div>
               )}
             </motion.div>
@@ -214,22 +249,8 @@ const AddTransactionModal = ({ isOpen, onClose, setActiveSection }) => {
           <AlertDialog open={showConfirmation} onOpenChange={setShowConfirmation}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle className="flex items-center gap-2 text-green-600">
-                  <CheckCircle2 className="h-6 w-6" /> Transaction Complete
-                </AlertDialogTitle>
-                <AlertDialogDescription asChild>
-                  <div className="space-y-4 pt-2">
-                    <p className="text-base text-foreground">Transaction for <strong>{completedCustomerName}</strong> was processed successfully.</p>
-                    <div className="bg-muted/50 border border-border rounded-lg p-4 flex items-center gap-3">
-                      <DollarSign className="h-8 w-8 text-primary" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Remaining Balance</p>
-                        <p className="text-2xl font-bold text-foreground">${completedBalance}</p>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Do you want to add another transaction for this customer?</p>
-                  </div>
-                </AlertDialogDescription>
+                <AlertDialogTitle>Transaction Complete</AlertDialogTitle>
+                <AlertDialogDescription>Receipt has been sent to the printer. Add another transaction for this customer?</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogAction onClick={() => { setShowConfirmation(false); resetState(); }}>Yes, continue</AlertDialogAction>

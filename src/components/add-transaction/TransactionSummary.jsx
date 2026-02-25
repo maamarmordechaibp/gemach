@@ -8,11 +8,17 @@ const TransactionSummary = ({
   transactionFee,
   onProcess,
   onDonate,
-  isProcessing
+  isProcessing,
+  customer,
+  applyFee,
 }) => {
+  const fee = applyFee ? transactionFee : 0;
+  const currentBalance = customer ? parseFloat(customer.balance) || 0 : null;
+  const remainingBalance = currentBalance !== null ? currentBalance + totalCredit - totalDebit - fee : null;
+
   return (
     <div className="flex flex-col sm:flex-row justify-between items-center gap-4 w-full">
-      <div className="flex gap-4 sm:gap-6 items-center">
+      <div className="flex gap-4 sm:gap-6 items-center flex-wrap">
         <div className="text-center">
           <p className="text-muted-foreground text-sm">Total Credit</p>
           <p className="text-2xl font-bold text-green-400">${totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
@@ -25,6 +31,14 @@ const TransactionSummary = ({
           <div className="text-center pl-4 border-l border-border">
             <p className="text-muted-foreground text-sm">Fee</p>
             <p className="text-lg font-bold text-yellow-400">${transactionFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          </div>
+        )}
+        {remainingBalance !== null && (totalCredit > 0 || totalDebit > 0) && (
+          <div className="text-center pl-4 border-l-2 border-primary">
+            <p className="text-muted-foreground text-sm">Remaining Balance</p>
+            <p className={`text-2xl font-bold ${remainingBalance >= 0 ? 'text-blue-400' : 'text-red-500'}`}>
+              ${remainingBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
           </div>
         )}
       </div>
