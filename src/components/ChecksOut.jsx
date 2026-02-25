@@ -320,35 +320,36 @@ ${fontUrl ? `@font-face { font-family: 'customCheckFont'; src: url('${fontUrl}')
 ${fontUrl ? `@font-face { font-family: 'customMicrFont'; src: url('${fontUrl}') format('woff'); font-display: swap; }` : ''}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: white; margin: 0; padding: 0; }
-.check-container { width: 8.5in; height: 3.5in; background: white; border: none; padding: 0.35in 0.4in 0.25in 0.4in; position: relative; margin: 0; page-break-inside: avoid; font-family: 'Roboto', Arial, sans-serif; }
-.check-container::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #1e4d72 0%, #2c5f8d 50%, #1e4d72 100%); }
-.account-name { position: absolute; top: 0.45in; left: 0.4in; font-size: 15pt; font-weight: 700; color: #1a1a1a; letter-spacing: 0.3px; text-transform: uppercase; }
-.phone-number { position: absolute; top: 0.7in; left: 0.4in; font-size: 9pt; color: #444; }
-.check-number { position: absolute; top: 0.42in; right: 0.4in; text-align: right; font-size: 18pt; font-weight: 700; color: #1e4d72; letter-spacing: 1px; }
-.account-address { position: absolute; top: 0.9in; left: 0.4in; font-size: 9pt; color: #444; line-height: 1.4; }
-.date-line { position: absolute; top: 0.68in; right: 0.4in; text-align: right; font-size: 10pt; color: #1a1a1a; font-weight: 500; }
+@page { margin: 0; size: letter; }
+.check-container { width: 8.5in; height: 3.667in; background: white; border: none; padding: 0; position: relative; margin: 0; page-break-inside: avoid; font-family: 'Roboto', Arial, sans-serif; overflow: hidden; }
+.account-name { position: absolute; top: 0.3in; left: 0.5in; font-size: 14pt; font-weight: 700; color: #000; letter-spacing: 0.3px; text-transform: uppercase; }
+.phone-number { position: absolute; top: 0.55in; left: 0.5in; font-size: 8pt; color: #333; }
+.check-number { position: absolute; top: 0.25in; right: 0.5in; text-align: right; font-size: 16pt; font-weight: 700; color: #000; letter-spacing: 1px; }
+.account-address { position: absolute; top: 0.7in; left: 0.5in; font-size: 8pt; color: #333; line-height: 1.4; }
+.date-line { position: absolute; top: 0.55in; right: 0.5in; text-align: right; font-size: 10pt; color: #000; font-weight: 500; }
 .date-line span { display: inline-block; min-width: 1.2in; border-bottom: 1px solid #333; padding: 0 4px 2px 4px; margin-left: 6px; }
-.payee-line { position: absolute; top: 1.35in; left: 0.4in; right: 1.6in; display: flex; align-items: baseline; font-size: 11pt; }
-.payee-label { font-weight: 600; color: #1a1a1a; white-space: nowrap; margin-right: 8px; font-size: 10pt; }
-.payee-input { flex: 1; border-bottom: 1px solid #333; font-size: 12pt; color: #000; font-weight: 500; padding: 0 4px 3px 4px; }
-.amount-box { position: absolute; top: 1.32in; right: 0.4in; width: 1.35in; height: 0.32in; display: flex; align-items: center; justify-content: flex-end; border: 2px solid #1e4d72; background: #f8f9fa; padding: 0 10px; font-size: 15pt; font-weight: 700; color: #000; font-family: 'Roboto Mono', monospace; }
-.amount-words { position: absolute; top: 1.75in; left: 0.4in; right: 0.4in; font-size: 10pt; border-bottom: 1px solid #333; min-height: 0.25in; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 4px 3px 4px; color: #000; }
+.payee-line { position: absolute; top: 1.15in; left: 0.5in; right: 1.6in; display: flex; align-items: baseline; font-size: 10pt; }
+.payee-label { font-weight: 600; color: #000; white-space: nowrap; margin-right: 8px; font-size: 9pt; }
+.payee-input { flex: 1; border-bottom: 1px solid #333; font-size: 11pt; color: #000; font-weight: 500; padding: 0 4px 2px 4px; }
+.amount-box { position: absolute; top: 1.12in; right: 0.5in; width: 1.3in; height: 0.28in; display: flex; align-items: center; justify-content: flex-end; border: 1.5px solid #000; background: #fff; padding: 0 8px; font-size: 13pt; font-weight: 700; color: #000; font-family: 'Roboto Mono', monospace; }
+.amount-words { position: absolute; top: 1.5in; left: 0.5in; right: 0.5in; font-size: 9pt; border-bottom: 1px solid #333; min-height: 0.22in; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 4px 2px 4px; color: #000; }
 .amount-text { flex: 1; color: #000; font-weight: 500; text-transform: capitalize; }
-.dollars-text { font-weight: 700; color: #000; font-size: 10pt; margin-left: 8px; }
-.bank-info { position: absolute; top: 2.1in; left: 0.4in; right: 3.5in; font-size: 10pt; color: #1a1a1a; line-height: 1.4; }
-.bank-name { font-weight: 700; font-size: 11pt; color: #1e4d72; text-transform: uppercase; letter-spacing: 0.3px; }
-.bank-address { font-size: 9pt; margin-top: 2px; color: #444; }
-.memo-signature { position: absolute; top: 2.6in; left: 0.4in; right: 0.4in; display: grid; grid-template-columns: 2.2in 1fr; gap: 0.5in; }
-.memo { display: flex; align-items: baseline; font-size: 9pt; }
-.memo-label { font-weight: 600; color: #1a1a1a; margin-right: 6px; }
-.memo-input { flex: 1; border-bottom: 1px solid #333; font-size: 9pt; padding: 0 4px 2px 4px; color: #000; max-width: 2in; }
+.dollars-text { font-weight: 700; color: #000; font-size: 9pt; margin-left: 8px; }
+.bank-info { position: absolute; top: 1.85in; left: 0.5in; right: 3.5in; font-size: 9pt; color: #000; line-height: 1.3; }
+.bank-name { font-weight: 700; font-size: 10pt; color: #000; text-transform: uppercase; letter-spacing: 0.3px; }
+.bank-address { font-size: 8pt; margin-top: 2px; color: #333; }
+.memo-signature { position: absolute; top: 2.35in; left: 0.5in; right: 0.5in; display: grid; grid-template-columns: 2.5in 1fr; gap: 0.5in; }
+.memo { display: flex; align-items: baseline; font-size: 8pt; }
+.memo-label { font-weight: 600; color: #000; margin-right: 6px; }
+.memo-input { flex: 1; border-bottom: 1px solid #333; font-size: 8pt; padding: 0 4px 2px 4px; color: #000; max-width: 2in; }
 .signature { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; }
-.signature-line { border-bottom: 1.5px solid #333; width: 100%; max-width: 2.8in; height: 0.35in; margin-bottom: 2px; }
-.signature-label { font-size: 8pt; color: #666; text-align: right; width: 100%; max-width: 2.8in; }
-.micr-line { position: absolute; bottom: 0.25in; left: 0.6in; right: 0.4in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', monospace; font-size: 12pt; letter-spacing: 2px; color: #000; line-height: 1; }
+.signature-line { border-bottom: 1.5px solid #333; width: 100%; max-width: 2.8in; height: 0.3in; margin-bottom: 2px; }
+.signature-label { font-size: 7pt; color: #555; text-align: right; width: 100%; max-width: 2.8in; }
+.micr-line { position: absolute; bottom: 0.35in; left: 0.75in; right: 0.5in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', monospace; font-size: 12pt; letter-spacing: 3px; color: #000; line-height: 1; }
 @media print {
   body { background: white; margin: 0; padding: 0; }
-  .check-container { box-shadow: none; border: none; page-break-inside: avoid; margin: 0; background: white; }
+  @page { margin: 0; size: letter; }
+  .check-container { box-shadow: none; border: none; page-break-inside: avoid; margin: 0; padding: 0; background: white; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 </style>

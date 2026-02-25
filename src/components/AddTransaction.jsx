@@ -19,9 +19,18 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { MinusCircle, PlusCircle, ArrowRightLeft, Loader2 } from 'lucide-react';
+import { MinusCircle, PlusCircle, ArrowRightLeft, Loader2, CheckCircle2, DollarSign } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const AddTransaction = () => {
   const { customers, loans, refreshData } = useData();
@@ -29,6 +38,7 @@ const AddTransaction = () => {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [completionInfo, setCompletionInfo] = useState(null);
   
   const {
     transactionState,
@@ -40,8 +50,17 @@ const AddTransaction = () => {
     resetState,
     isProcessing,
   } = useTransactionLogic(selectedCustomer, () => {
+    // Calculate new balance before resetting
+    if (selectedCustomer) {
+      const fee = transactionState?.applyFee ? transactionFee : 0;
+      const transferAmt = parseFloat(transactionState?.transferDetails?.amount) || 0;
+      const newBalance = (parseFloat(selectedCustomer.balance) || 0) + totalCredit - totalDebit - fee - transferAmt;
+      setCompletionInfo({
+        customerName: `${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
+        balance: newBalance.toFixed(2),
+      });
+    }
     handleFullReset();
-    toast({ title: "Success", description: "Transaction completed successfully." });
   });
   
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -210,6 +229,31 @@ const AddTransaction = () => {
       <LoanChoiceDialog isOpen={loanPrompt.show} onClose={() => setLoanPrompt({ ...loanPrompt, show: false })} onConfirm={handleLoanPromptConfirm} totalDebit={totalDebit} shortfall={loanPrompt.shortfall} dueDate={loanPrompt.dueDate} setDueDate={(d) => setLoanPrompt({...loanPrompt, dueDate: d})} loanOption={loanPrompt.loanOption} setLoanOption={(o) => setLoanPrompt({...loanPrompt, loanOption: o})} isProcessing={isProcessing} />
       <RepaymentDialog isOpen={repaymentPrompt.show} onClose={() => setRepaymentPrompt({ show: false, loan: null })} onConfirm={handleRepaymentConfirm} loan={repaymentPrompt.loan} totalCredit={totalCredit} />
       <AdminPasswordDialog isOpen={passwordDialog.show} onClose={() => setPasswordDialog({ show: false, onConfirm: null })} onConfirm={passwordDialog.onConfirm} />
+
+      <AlertDialog open={!!completionInfo} onOpenChange={(open) => !open && setCompletionInfo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-green-600">
+              <CheckCircle2 className="h-6 w-6" /> Transaction Complete
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4 pt-2">
+                <p className="text-base text-foreground">Transaction for <strong>{completionInfo?.customerName}</strong> was processed successfully.</p>
+                <div className="bg-muted/50 border border-border rounded-lg p-4 flex items-center gap-3">
+                  <DollarSign className="h-8 w-8 text-primary" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Remaining Balance</p>
+                    <p className="text-2xl font-bold text-foreground">${completionInfo?.balance}</p>
+                  </div>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setCompletionInfo(null)}>Done</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

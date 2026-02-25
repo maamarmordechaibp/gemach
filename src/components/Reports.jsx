@@ -1,5 +1,5 @@
 
-    import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+    import React, { useState, useMemo, useEffect, useCallback } from 'react';
     import { motion } from 'framer-motion';
     import { useData } from '@/contexts/DataContext';
     import { FileText, Filter, Download, RotateCcw, Loader2, Printer } from 'lucide-react';
@@ -9,8 +9,6 @@
     import { supabase } from '@/lib/customSupabaseClient';
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
     import { saveAs } from 'file-saver';
-    import { useReactToPrint } from 'react-to-print';
-    import Statement from '@/components/ui/statement';
     import { cn } from '@/lib/utils';
 
     const Reports = () => {
@@ -28,7 +26,6 @@
       const [filters, setFilters] = useState({});
       const [results, setResults] = useState([]);
       const [voidingFee, setVoidingFee] = useState(null);
-      const printComponentRef = useRef(null);
       
       const reportHeaders = useMemo(() => {
         switch (reportType) {
@@ -41,10 +38,46 @@
         }
       }, [reportType]);
 
-      const handlePrint = useReactToPrint({
-        content: () => printComponentRef.current,
-        documentTitle: `${reportType.replace(/_/g, ' ')} Report - ${new Date().toLocaleDateString()}`
-      });
+      const handlePrint = () => {
+        if (results.length === 0) return;
+        const companyInfo = settings?.check_config || {};
+        const title = `${reportType.replace(/_/g, ' ')} Report`;
+        const headers = reportHeaders.map(h => h.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()));
+
+        const headerRow = headers.map(h => `<th style="padding:8px;text-align:left;border-bottom:2px solid #000;font-size:12px;">${h}</th>`).join('');
+        const bodyRows = results.map(row => {
+          const cells = reportHeaders.map(h => {
+            let value = row[h];
+            if (h === 'customer') value = row.customer || 'N/A';
+            if (h === 'fromAccount') value = row.fromAccount || 'N/A';
+            if (h === 'checkNumber') value = row.checkNumber || 'N/A';
+            if (h === 'balance' || (h === 'amount' && typeof value === 'number')) value = `$${parseFloat(value).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+            if (h === 'date' && value) value = new Date(value).toLocaleDateString();
+            return `<td style="padding:8px;border-bottom:1px solid #ddd;font-size:12px;">${String(value ?? '')}</td>`;
+          }).join('');
+          const rowStyle = row.status === 'voided' ? 'opacity:0.5;text-decoration:line-through;' : '';
+          return `<tr style="${rowStyle}">${cells}</tr>`;
+        }).join('');
+
+        const printWindow = window.open('', '_blank', 'width=900,height=700');
+        if (!printWindow) return;
+        printWindow.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
+<style>* { box-sizing: border-box; margin: 0; padding: 0; } body { font-family: Arial, sans-serif; padding: 40px; color: #000; background: #fff; } @media print { body { padding: 20px; } }</style>
+</head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:2px solid #000;margin-bottom:24px;">
+  <div><h1 style="font-size:24px;font-weight:bold;text-transform:capitalize;">${title}</h1></div>
+  <div style="text-align:right;">
+    ${companyInfo.name ? `<h2 style="font-size:16px;font-weight:bold;color:#333;">${companyInfo.name}</h2>` : ''}
+    ${companyInfo.address1 ? `<p style="color:#555;">${companyInfo.address1}</p>` : ''}
+    <p style="color:#555;margin-top:8px;">Date: ${new Date().toLocaleDateString()}</p>
+  </div>
+</div>
+<table style="width:100%;border-collapse:collapse;"><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>
+<footer style="text-align:center;font-size:11px;color:#888;padding-top:16px;border-top:1px solid #ddd;margin-top:32px;">Generated on ${new Date().toLocaleString()}</footer>
+</body></html>`);
+        printWindow.document.close();
+        setTimeout(() => { printWindow.focus(); printWindow.print(); setTimeout(() => printWindow.close(), 1000); }, 500);
+      };
       
       const feeTransactions = useMemo(() => {
         if (!transactions || !customers) return [];
@@ -288,19 +321,6 @@
           </div>;
       };
 
-      const renderPrintableContent = () => (
-         <div className="hidden">
-            <div ref={printComponentRef}>
-              <Statement 
-                title={`${reportType.replace(/_/g, ' ')} Report`}
-                transactions={results.map(r => ({...r, customer: customers.find(c => c.account_number === r.account_number)}))}
-                settings={settings}
-                filters={filters}
-              />
-            </div>
-        </div>
-      );
-
       return <div className="space-y-6 p-4">
           <div className="flex items-center gap-4">
             <FileText className="h-8 w-8 text-primary" />
@@ -343,8 +363,7 @@
             </div>
           </motion.div>
           
-          {renderPrintableContent()}
-
+          
           <AlertDialog open={!!voidingFee} onOpenChange={open => !open && setVoidingFee(null)}>
             <AlertDialogContent>
               <AlertDialogHeader>

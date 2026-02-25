@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Banknote, X, AlertTriangle, Loader2 } from 'lucide-react';
+import { Banknote, X, AlertTriangle, Loader2, CheckCircle2, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useData } from '@/contexts/DataContext';
@@ -43,11 +43,20 @@ const AddTransactionModal = ({ isOpen, onClose, setActiveSection }) => {
     resetState,
     isProcessing,
   } = useTransactionLogic(selectedCustomer, () => {
+    if (selectedCustomer) {
+      const fee = transactionState?.applyFee ? transactionFee : 0;
+      const transferAmt = parseFloat(transactionState?.transferDetails?.amount) || 0;
+      const newBalance = (parseFloat(selectedCustomer.balance) || 0) + totalCredit - totalDebit - fee - transferAmt;
+      setCompletedBalance(newBalance.toFixed(2));
+      setCompletedCustomerName(`${selectedCustomer.first_name} ${selectedCustomer.last_name}`);
+    }
     setShowConfirmation(true);
   });
   
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [completedBalance, setCompletedBalance] = useState(null);
+  const [completedCustomerName, setCompletedCustomerName] = useState('');
   const [customerInitialData, setCustomerInitialData] = useState({});
   
   const [loanPrompt, setLoanPrompt] = useState({ show: false, shortfall: 0, dueDate: '', loanOption: 'shortfall' });
@@ -204,7 +213,24 @@ const AddTransactionModal = ({ isOpen, onClose, setActiveSection }) => {
           <CustomerModal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSave={handleSaveCustomer} initialData={customerInitialData} />
           <AlertDialog open={showConfirmation} onOpenChange={setShowConfirmation}>
             <AlertDialogContent>
-              <AlertDialogHeader><AlertDialogTitle>Transaction Complete</AlertDialogTitle><AlertDialogDescription>Do you want to add another transaction for this customer?</AlertDialogDescription></AlertDialogHeader>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2 text-green-600">
+                  <CheckCircle2 className="h-6 w-6" /> Transaction Complete
+                </AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-4 pt-2">
+                    <p className="text-base text-foreground">Transaction for <strong>{completedCustomerName}</strong> was processed successfully.</p>
+                    <div className="bg-muted/50 border border-border rounded-lg p-4 flex items-center gap-3">
+                      <DollarSign className="h-8 w-8 text-primary" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Remaining Balance</p>
+                        <p className="text-2xl font-bold text-foreground">${completedBalance}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Do you want to add another transaction for this customer?</p>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogAction onClick={() => { setShowConfirmation(false); resetState(); }}>Yes, continue</AlertDialogAction>
                 <AlertDialogCancel onClick={() => { setShowConfirmation(false); handleClose(); }}>No, close</AlertDialogCancel>

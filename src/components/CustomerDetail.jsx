@@ -1,5 +1,5 @@
 
-    import React, { useState, useMemo, useRef } from 'react';
+    import React, { useState, useMemo } from 'react';
     import { useParams, Link } from 'react-router-dom';
     import { useData } from '@/contexts/DataContext';
     import { Loader2, ArrowLeft, User, Hash, Phone, DollarSign, Printer } from 'lucide-react';
@@ -14,8 +14,6 @@
     } from '@/components/ui/card.jsx';
     import Transactions from '@/components/Transactions';
     import { Input } from '@/components/ui/input';
-    import { useReactToPrint } from 'react-to-print';
-    import Statement from '@/components/ui/statement';
     import { Label } from '@/components/ui/label';
     import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
@@ -27,17 +25,76 @@
         
         const [filters, setFilters] = useState({ startDate: '', endDate: '', type: 'both' });
         const [sort, setSort] = useState({ key: 'date', order: 'desc' });
-        const printComponentRef = useRef(null);
 
         const subAccounts = useMemo(() => {
             if (!customer) return [];
             return customers.filter(c => c.parent_account_id === customer.account_number);
         }, [customers, customer]);
         
-        const handlePrint = useReactToPrint({
-            content: () => printComponentRef.current,
-            documentTitle: customer ? `Statement - ${customer.first_name} ${customer.last_name}` : 'Statement',
-        });
+        const handlePrint = () => {
+            if (!customer) return;
+            const companyInfo = settings?.check_config || {};
+            const totals = filteredAndSortedTransactions.reduce((acc, tx) => {
+                if (tx.status !== 'voided') {
+                    if (tx.type === 'credit') acc.credit += parseFloat(tx.amount);
+                    else if (tx.type === 'debit' || tx.type === 'fee') acc.debit += parseFloat(tx.amount);
+                }
+                return acc;
+            }, { credit: 0, debit: 0 });
+
+            const txRows = filteredAndSortedTransactions.map(tx => `
+                <tr style="border-bottom: 1px solid #ddd; ${tx.status === 'voided' ? 'opacity:0.5;' : ''}">
+                    <td style="padding: 8px;">${new Date(tx.date).toLocaleDateString()}</td>
+                    <td style="padding: 8px; text-transform: capitalize;">${tx.type}</td>
+                    <td style="padding: 8px;">${tx.memo || tx.reason || ''} ${tx.status === 'voided' ? '(VOIDED)' : ''}</td>
+                    <td style="padding: 8px; text-align: right; font-family: monospace; color: ${tx.type === 'credit' ? 'green' : 'red'};">${tx.type === 'credit' ? '+' : '-'}$${parseFloat(tx.amount).toFixed(2)}</td>
+                </tr>`).join('');
+
+            const subAccountsHtml = subAccounts.length > 0 ? `<div style="font-size:11px;margin-top:8px;"><strong>Sub-Accounts:</strong><ul style="padding-left:20px;margin:4px 0;">${subAccounts.map(sa => `<li>${sa.first_name} ${sa.last_name} (${sa.account_number})</li>`).join('')}</ul></div>` : '';
+
+            const printWindow = window.open('', '_blank', 'width=900,height=700');
+            if (!printWindow) return;
+            printWindow.document.write(`<!DOCTYPE html><html><head><title>Statement - ${customer.first_name} ${customer.last_name}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; padding: 40px; color: #000; background: #fff; }
+  @media print { body { padding: 20px; } }
+</style></head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:2px solid #000;margin-bottom:24px;">
+  <div>
+    <h1 style="font-size:24px;font-weight:bold;">${customer.first_name} ${customer.last_name}</h1>
+    <p style="color:#555;">Account: ${customer.account_number}</p>
+    ${customer.phone_number ? `<p style="color:#555;">Phone: ${customer.phone_number}</p>` : ''}
+    ${subAccountsHtml}
+  </div>
+  <div style="text-align:right;">
+    ${companyInfo.name ? `<h2 style="font-size:16px;font-weight:bold;color:#333;">${companyInfo.name}</h2>` : ''}
+    ${companyInfo.address1 ? `<p style="color:#555;">${companyInfo.address1}</p>` : ''}
+    ${companyInfo.address2 ? `<p style="color:#555;">${companyInfo.address2}</p>` : ''}
+    <p style="color:#555;margin-top:8px;">Date: ${new Date().toLocaleDateString()}</p>
+  </div>
+</div>
+<div style="margin-bottom:24px;">
+  <h3 style="font-size:18px;font-weight:600;border-bottom:1px solid #999;padding-bottom:8px;margin-bottom:16px;">Summary</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center;">
+    <div style="background:#f0f0f0;padding:16px;border-radius:6px;"><p style="font-size:12px;color:#555;">Total Credits</p><p style="font-size:20px;font-weight:bold;color:green;">$${totals.credit.toFixed(2)}</p></div>
+    <div style="background:#f0f0f0;padding:16px;border-radius:6px;"><p style="font-size:12px;color:#555;">Total Debits & Fees</p><p style="font-size:20px;font-weight:bold;color:red;">$${totals.debit.toFixed(2)}</p></div>
+    <div style="background:#e0eeff;padding:16px;border-radius:6px;"><p style="font-size:12px;color:#555;">Current Balance</p><p style="font-size:20px;font-weight:bold;color:#1a5db5;">$${parseFloat(customer.balance).toFixed(2)}</p></div>
+  </div>
+</div>
+<div>
+  <h3 style="font-size:18px;font-weight:600;border-bottom:1px solid #999;padding-bottom:8px;margin-bottom:16px;">Transaction History</h3>
+  ${filteredAndSortedTransactions.length === 0 ? '<p style="text-align:center;padding:24px;color:#888;">No transactions to display.</p>' : `
+  <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <thead><tr style="border-bottom:2px solid #000;"><th style="padding:8px;text-align:left;">Date</th><th style="padding:8px;text-align:left;">Type</th><th style="padding:8px;text-align:left;">Memo</th><th style="padding:8px;text-align:right;">Amount</th></tr></thead>
+    <tbody>${txRows}</tbody>
+  </table>`}
+</div>
+<footer style="text-align:center;font-size:11px;color:#888;padding-top:16px;border-top:1px solid #ddd;margin-top:32px;">Thank you for your business.</footer>
+</body></html>`);
+            printWindow.document.close();
+            setTimeout(() => { printWindow.focus(); printWindow.print(); setTimeout(() => printWindow.close(), 1000); }, 500);
+        };
 
         const filteredAndSortedTransactions = useMemo(() => {
             if (!transactions || !customer) return [];
@@ -204,19 +261,6 @@
                     </CardContent>
                 </Card>
                 
-                <div className="hidden">
-                    <div ref={printComponentRef}>
-                         <Statement 
-                          title="Customer Statement"
-                          customer={customer}
-                          subAccounts={subAccounts}
-                          transactions={filteredAndSortedTransactions}
-                          filters={filters}
-                          settings={settings}
-                        />
-                    </div>
-                </div>
-
             </motion.div>
         );
     };
