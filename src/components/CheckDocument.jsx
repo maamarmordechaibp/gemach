@@ -93,7 +93,6 @@
                     <div className="amount-box">${amount}</div>
                     <div className="amount-words">
                         <span className="amount-text">{amountInWords}</span>
-                        <span className="dollars-text">DOLLARS</span>
                     </div>
                     <div className="bank-info">
                         <div className="bank-name">{config?.bank_name}</div>
@@ -187,13 +186,13 @@
                     
                     .check-number { 
                         position: absolute;
-                        top: 0.48in;
+                        top: 0.27in;
                         right: 0.4in;
                         text-align: right; 
-                        font-size: 13pt; 
-                        font-weight: 400; 
-                        color: #5a5a5a;
-                        letter-spacing: 0.3px;
+                        font-size: 15pt; 
+                        font-weight: 500; 
+                        color: #000;
+                        letter-spacing: 0.5px;
                     }
                     
                     .account-address { 
@@ -208,12 +207,12 @@
                     
                     .date-line { 
                         position: absolute;
-                        top: 0.78in;
-                        right: 0.4in;
-                        text-align: right; 
-                        font-size: 10pt;
-                        color: #444;
-                        font-weight: 400;
+                        top: 0.48in;
+                        right: 1.2in;
+                        text-align: left; 
+                        font-size: 11pt;
+                        color: #000;
+                        font-weight: 500;
                     }
                     
                     /* Payee Section */
@@ -259,8 +258,7 @@
                         display: flex;
                         align-items: center;
                         justify-content: flex-end;
-                        border: 2px solid #1e4d72;
-                        background: #f8f9fa;
+                        background: transparent;
                         padding: 0 10px;
                         font-size: 15pt;
                         font-weight: 700;
@@ -291,12 +289,7 @@
                         text-transform: capitalize;
                     }
                     
-                    .dollars-text { 
-                        font-weight: 700; 
-                        color: #000;
-                        font-size: 10pt;
-                        margin-left: 8px;
-                    }
+
                     
                     /* Bank Info Section */
                     .bank-info { 
