@@ -44,7 +44,7 @@
             if (words === '') words = 'Zero';
 
             const cents = Math.round((num - Math.floor(num)) * 100);
-            return `${words.charAt(0).toUpperCase() + words.slice(1)} and ${cents}/100 Dollars`;
+            return `${words.charAt(0).toUpperCase() + words.slice(1)} and ${cents}/100`;
         };
 
         const SingleCheck = ({ check }) => {

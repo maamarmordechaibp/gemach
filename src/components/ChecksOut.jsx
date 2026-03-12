@@ -271,7 +271,7 @@ const ChecksOut = () => {
                 <div class="amount-box">$${amount}</div>
                 <div class="amount-words">
                     <span class="amount-text">${amountInWords}</span>
-                    <span class="dollars-text">DOLLARS</span>
+
                 </div>
                 <div class="bank-info">
                     <div class="bank-name">${config.bank_name || ''}</div>

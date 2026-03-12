@@ -35,7 +35,6 @@ const numberToWords = (amount) => {
     }
 
     if (result === '') result = 'Zero';
-    result = `${result} Dollars`;
 
     // Add the cents part if it exists, otherwise add ".00/100"
     if (cents > 0) {
