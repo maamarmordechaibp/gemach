@@ -78,8 +78,8 @@
             // Format MICR line with proper E-13B characters
             // Transit symbol: ⑆ (U+2446) for routing number delimiters
             // On-Us symbol: ⑈ (U+2448) for account/check delimiters
-            // MICR format: ⑆routing⑆ ⑈account⑈ ⑈check⑈
-            const micrLine = `⑆${micrRouting}⑆ ⑈${micrAccount}⑈ ⑈${checkNumber}⑈`;
+            // Standard format: ⑈check⑈ ⑆routing⑆ ⑈account⑈
+            const micrLine = `⑈${checkNumber}⑈ ⑆${micrRouting}⑆ ⑈${micrAccount}⑈`;
             
             return (
                 <div className="check-container" key={idx}>
@@ -171,11 +171,11 @@
                         position: absolute;
                         top: 0.45in;
                         left: 0.4in;
-                        font-size: 15pt; 
-                        font-weight: 700; 
-                        color: #1a1a1a;
-                        letter-spacing: 0.3px;
-                        text-transform: uppercase;
+                        font-size: 14pt; 
+                        font-weight: 600; 
+                        color: #1e4d72;
+                        letter-spacing: 0.5px;
+                        text-transform: none;
                     }
                     
                     .phone-number { 
@@ -192,10 +192,12 @@
                         top: 0.42in;
                         right: 0.4in;
                         text-align: right; 
-                        font-size: 18pt; 
-                        font-weight: 700; 
-                        color: #1e4d72;
-                        letter-spacing: 1px;
+                        font-size: 16pt; 
+                        font-weight: 500; 
+                        color: #2c5f8d;
+                        letter-spacing: 0.5px;
+                        font-family: 'Roboto', serif;
+                        font-style: italic;
                     }
                     
                     .account-address { 
