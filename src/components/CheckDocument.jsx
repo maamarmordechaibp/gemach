@@ -75,19 +75,17 @@
             const micrRouting = config?.routing_number || '123456789';
             const micrAccount = config?.account_number || '1122334455';
             
-            // Format MICR line with proper E-13B characters
-            // Transit symbol: ⑆ (U+2446) for routing number delimiters
-            // On-Us symbol: ⑈ (U+2448) for account/check delimiters
-            // Standard format: ⑈check⑈ ⑆routing⑆ ⑈account⑈
-            const micrLine = `⑈${checkNumber}⑈ ⑆${micrRouting}⑆ ⑈${micrAccount}⑈`;
+            // Format MICR line - cleaner format without excessive symbols
+            // Just the numbers with simple spacing
+            const micrLine = `${checkNumber}  ${micrRouting}  ${micrAccount}`;
             
             return (
                 <div className="check-container" key={idx}>
                     <div className="account-name">{accountName}</div>
                     <div className="phone-number">{config?.phone_number || ''}</div>
-                    <div className="check-number">No. {checkNumber}</div>
+                    <div className="check-number">{checkNumber}</div>
                     <div className="account-address">{config?.address1}<br />{config?.address2}</div>
-                    <div className="date-line">Date <span>{date}</span></div>
+                    <div className="date-line">{date}</div>
                     <div className="payee-line">
                         <span className="payee-label">Pay to the order of</span>
                         <span className="payee-input">{payToOrderOf}</span>
@@ -189,15 +187,13 @@
                     
                     .check-number { 
                         position: absolute;
-                        top: 0.42in;
+                        top: 0.48in;
                         right: 0.4in;
                         text-align: right; 
-                        font-size: 16pt; 
-                        font-weight: 500; 
-                        color: #2c5f8d;
-                        letter-spacing: 0.5px;
-                        font-family: 'Roboto', serif;
-                        font-style: italic;
+                        font-size: 13pt; 
+                        font-weight: 400; 
+                        color: #5a5a5a;
+                        letter-spacing: 0.3px;
                     }
                     
                     .account-address { 
@@ -212,20 +208,12 @@
                     
                     .date-line { 
                         position: absolute;
-                        top: 0.68in;
+                        top: 0.78in;
                         right: 0.4in;
                         text-align: right; 
                         font-size: 10pt;
-                        color: #1a1a1a;
-                        font-weight: 500;
-                    }
-                    
-                    .date-line span {
-                        display: inline-block;
-                        min-width: 1.2in;
-                        border-bottom: 1px solid #333;
-                        padding: 0 4px 2px 4px;
-                        margin-left: 6px;
+                        color: #444;
+                        font-weight: 400;
                     }
                     
                     /* Payee Section */
@@ -398,11 +386,11 @@
                         bottom: 0.2in;
                         left: 0.6in;
                         right: 0.4in;
-                        font-family: ${micrFontUrl ? "'customMicrFont'" : "'MICR E13B', 'Roboto Mono'"}, monospace;
-                        font-size: 13pt;
-                        font-weight: 400;
-                        letter-spacing: 1.5px;
-                        color: #000;
+                        font-family: ${micrFontUrl ? "'customMicrFont'" : "'Roboto Mono'"}, monospace;
+                        font-size: 11pt;
+                        font-weight: 300;
+                        letter-spacing: 2px;
+                        color: #333;
                         line-height: 1;
                     }
                     
