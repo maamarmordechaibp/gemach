@@ -37,7 +37,6 @@ const numberToWords = (amount) => {
     }
 
     if (result === '') result = 'Zero';
-    result = `${result} Dollars`;
 
     // Add the cents part if it exists, otherwise add ".00/100"
     if (cents > 0) {
@@ -95,13 +94,13 @@ const PrintableCheck = React.forwardRef(({ checks }, ref) => {
                         </div>
 
                         {/* Check number - top-right, aligned 0.5 inch from right */}
-                        <div className="absolute text-right" style={{ top: '0.5in', right: '0.5in' }}>
-                            <p className="font-bold" style={{ fontFamily: 'helvetica', fontSize: '14pt' }}>{check.check_number}</p>
+                        <div className="absolute text-right" style={{ top: '0.3in', right: '0.5in' }}>
+                            <p className="font-bold" style={{ fontFamily: 'helvetica', fontSize: '16pt' }}>No. {check.check_number}</p>
                         </div>
 
                         {/* Date - below check number */}
-                        <div className="absolute text-right" style={{ top: '0.9in', right: '0.5in' }}>
-                            <p style={{ fontFamily: 'helvetica', fontSize: '10pt' }}>Date: {new Date(check.date).toLocaleDateString('en-US')}</p>
+                        <div className="absolute text-right" style={{ top: '0.6in', right: '0.5in' }}>
+                            <p style={{ fontFamily: 'helvetica', fontSize: '11pt' }}>Date ______{new Date(check.date).toLocaleDateString('en-US')}</p>
                         </div>
 
                         {/* Pay to the Order of line */}
