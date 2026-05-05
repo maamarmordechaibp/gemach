@@ -334,10 +334,10 @@ body { background: white; margin: 0; padding: 0; font-family: 'Roboto', Arial, s
 @page { margin: 0; size: letter; }
 
 /* Each printed page = letter (8.5 x 11), holds exactly 3 checks of 3.5in */
-.check-page { width: 8.5in; height: 11in; padding: 0.25in 0; margin: 0; page-break-after: always; display: block; }
+.check-page { width: 8.5in; height: 10.98in; padding: 0; margin: 0; page-break-after: always; display: block; overflow: hidden; }
 .check-page:last-child { page-break-after: auto; }
 
-.check-container { width: 8.5in; height: 3.5in; background: white; border: none; padding: 0; position: relative; margin: 0; page-break-inside: avoid; font-family: 'Roboto', Arial, sans-serif; overflow: hidden; }
+.check-container { width: 8.5in; height: 3.5in; background: white; border: none; padding: 0; position: relative; margin: 0; page-break-inside: avoid; font-family: 'Roboto', Arial, sans-serif; overflow: hidden; display: block; }
 .check-container.empty { background: transparent; }
 
 /* Header - account info (top-left) */
