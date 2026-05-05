@@ -304,7 +304,17 @@ const ChecksOut = () => {
 
         const config = settings?.check_config || {};
         const fontUrl = config.font_url;
-        const checksHtml = checksToPrint.map(c => buildCheckHtml(c)).join('');
+        // Group checks into pages of 3
+        const pages = [];
+        for (let i = 0; i < checksToPrint.length; i += 3) {
+            pages.push(checksToPrint.slice(i, i + 3));
+        }
+        const checksHtml = pages.map(pageChecks => {
+            const filled = pageChecks.map(c => buildCheckHtml(c)).join('');
+            // Pad with empty slots so each page is exactly 3 slots tall
+            const empty = Array(3 - pageChecks.length).fill('<div class="check-container empty"></div>').join('');
+            return `<div class="check-page">${filled}${empty}</div>`;
+        }).join('');
 
         const printWindow = window.open('', '_blank', 'width=900,height=700');
         if (!printWindow) {
@@ -322,53 +332,61 @@ ${fontUrl ? `@font-face { font-family: 'customMicrFont'; src: url('${fontUrl}') 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: white; margin: 0; padding: 0; font-family: 'Roboto', Arial, sans-serif; color: #000; }
 @page { margin: 0; size: letter; }
-.check-container { width: 8.5in; height: 3.5in; background: white; border: none; padding: 0; position: relative; margin: 0; page-break-inside: avoid; font-family: 'Roboto', Arial, sans-serif; overflow: hidden; }
 
-/* Header - account info */
-.account-name { position: absolute; top: 0.32in; left: 0.5in; font-size: 13pt; font-weight: 700; color: #000; letter-spacing: 0.3px; }
-.account-address { position: absolute; top: 0.58in; left: 0.5in; font-size: 8.5pt; color: #333; line-height: 1.35; }
-.phone-number { position: absolute; top: 0.95in; left: 0.5in; font-size: 8.5pt; color: #333; }
+/* Each printed page = letter (8.5 x 11), holds exactly 3 checks of 3.5in */
+.check-page { width: 8.5in; height: 11in; padding: 0.25in 0; margin: 0; page-break-after: always; display: block; }
+.check-page:last-child { page-break-after: auto; }
+
+.check-container { width: 8.5in; height: 3.5in; background: white; border: none; padding: 0; position: relative; margin: 0; page-break-inside: avoid; font-family: 'Roboto', Arial, sans-serif; overflow: hidden; }
+.check-container.empty { background: transparent; }
+
+/* Header - account info (top-left) */
+.account-name { position: absolute; top: 0.28in; left: 0.5in; font-size: 12.5pt; font-weight: 700; color: #000; letter-spacing: 0.3px; }
+.account-address { position: absolute; top: 0.52in; left: 0.5in; font-size: 8pt; color: #333; line-height: 1.3; }
+.phone-number { position: absolute; top: 0.85in; left: 0.5in; font-size: 8pt; color: #333; }
 
 /* Check number top-right */
-.check-number { position: absolute; top: 0.32in; right: 0.5in; text-align: right; font-size: 14pt; font-weight: 700; color: #000; letter-spacing: 0.5px; }
+.check-number { position: absolute; top: 0.28in; right: 0.5in; text-align: right; font-size: 14pt; font-weight: 700; color: #000; letter-spacing: 0.5px; }
 
-/* Date - directly under check number, simple */
-.date-line { position: absolute; top: 0.62in; right: 0.5in; text-align: right; font-size: 9.5pt; color: #000; display: flex; align-items: baseline; gap: 6px; }
+/* Date - directly under check number */
+.date-line { position: absolute; top: 0.58in; right: 0.5in; font-size: 9.5pt; color: #000; display: flex; align-items: baseline; gap: 6px; }
 .date-line .date-label { font-weight: 600; color: #000; }
-.date-line .date-value { display: inline-block; min-width: 1.1in; border-bottom: 1px solid #555; padding: 0 4px 1px 4px; text-align: center; }
+.date-line .date-value { display: inline-block; min-width: 1in; border-bottom: 1px solid #555; padding: 0 4px 1px 4px; text-align: center; }
 
 /* Pay to the order of */
-.payee-line { position: absolute; top: 1.2in; left: 0.5in; right: 1.6in; display: flex; align-items: baseline; font-size: 10pt; }
+.payee-line { position: absolute; top: 1.15in; left: 0.5in; right: 1.55in; display: flex; align-items: baseline; font-size: 10pt; }
 .payee-label { font-weight: 600; color: #000; white-space: nowrap; margin-right: 10px; font-size: 9.5pt; }
 .payee-input { flex: 1; border-bottom: 1px solid #555; font-size: 11pt; color: #000; font-weight: 500; padding: 0 6px 2px 6px; min-height: 16pt; }
 
-/* Amount box - subtle border */
-.amount-box { position: absolute; top: 1.17in; right: 0.5in; width: 1.3in; height: 0.3in; display: flex; align-items: center; justify-content: flex-end; border: 1px solid #555; background: #fff; padding: 0 8px; font-size: 12.5pt; font-weight: 700; color: #000; font-family: 'Roboto Mono', monospace; }
+/* Amount box */
+.amount-box { position: absolute; top: 1.12in; right: 0.5in; width: 1.25in; height: 0.28in; display: flex; align-items: center; justify-content: flex-end; border: 1px solid #555; background: #fff; padding: 0 8px; font-size: 12pt; font-weight: 700; color: #000; font-family: 'Roboto Mono', monospace; }
 
-/* Amount in words - clean, no DOLLARS label */
-.amount-words { position: absolute; top: 1.6in; left: 0.5in; right: 0.5in; font-size: 9.5pt; border-bottom: 1px solid #555; min-height: 0.24in; display: flex; align-items: flex-end; padding: 0 6px 2px 6px; color: #000; }
+/* Amount in words - no DOLLARS label */
+.amount-words { position: absolute; top: 1.5in; left: 0.5in; right: 0.5in; font-size: 9.5pt; border-bottom: 1px solid #555; min-height: 0.22in; display: flex; align-items: flex-end; padding: 0 6px 2px 6px; color: #000; }
 .amount-text { flex: 1; color: #000; font-weight: 500; text-transform: capitalize; }
 
 /* Bank info */
-.bank-info { position: absolute; top: 1.95in; left: 0.5in; right: 3.5in; font-size: 9pt; color: #000; line-height: 1.3; }
-.bank-name { font-weight: 700; font-size: 10pt; color: #000; text-transform: uppercase; letter-spacing: 0.3px; }
-.bank-address { font-size: 8.5pt; margin-top: 2px; color: #333; font-weight: 400; }
+.bank-info { position: absolute; top: 1.82in; left: 0.5in; right: 3.5in; font-size: 9pt; color: #000; line-height: 1.3; }
+.bank-name { font-weight: 700; font-size: 9.5pt; color: #000; text-transform: uppercase; letter-spacing: 0.3px; }
+.bank-address { font-size: 8pt; margin-top: 2px; color: #333; font-weight: 400; }
 
-/* Memo + signature row */
-.memo-signature { position: absolute; top: 2.45in; left: 0.5in; right: 0.5in; display: grid; grid-template-columns: 2.5in 1fr; gap: 0.5in; }
+/* Memo + signature */
+.memo-signature { position: absolute; top: 2.3in; left: 0.5in; right: 0.5in; display: grid; grid-template-columns: 2.5in 1fr; gap: 0.4in; }
 .memo { display: flex; align-items: baseline; font-size: 9pt; }
 .memo-label { font-weight: 600; color: #000; margin-right: 8px; }
 .memo-input { flex: 1; border-bottom: 1px solid #555; font-size: 9pt; padding: 0 4px 2px 4px; color: #000; max-width: 2in; min-height: 12pt; }
 .signature { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; }
-.signature-line { border-bottom: 1px solid #333; width: 100%; max-width: 2.8in; height: 0.28in; margin-bottom: 2px; }
+.signature-line { border-bottom: 1px solid #333; width: 100%; max-width: 2.8in; height: 0.26in; margin-bottom: 2px; }
 .signature-label { font-size: 7.5pt; color: #555; text-align: right; width: 100%; max-width: 2.8in; }
 
-/* MICR line - moved up, proper symbols */
-.micr-line { position: absolute; bottom: 0.22in; left: 0.6in; right: 0.5in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', 'Courier New', monospace; font-size: 13pt; letter-spacing: 2px; color: #000; line-height: 1; font-weight: 500; }
+/* MICR line - bottom of check */
+.micr-line { position: absolute; bottom: 0.2in; left: 0.6in; right: 0.5in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', 'Courier New', monospace; font-size: 13pt; letter-spacing: 2px; color: #000; line-height: 1; font-weight: 500; }
 
 @media print {
-  body { background: white; margin: 0; padding: 0; }
+  html, body { background: white; margin: 0; padding: 0; }
   @page { margin: 0; size: letter; }
+  .check-page { page-break-after: always; }
+  .check-page:last-child { page-break-after: auto; }
   .check-container { box-shadow: none; border: none; page-break-inside: avoid; margin: 0; padding: 0; background: white; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
