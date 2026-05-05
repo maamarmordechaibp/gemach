@@ -255,7 +255,9 @@ const ChecksOut = () => {
         const date = new Date(checkData.date).toLocaleDateString();
         const micrRouting = config.routing_number || '123456789';
         const micrAccount = config.account_number || '1122334455';
-        const micrLine = `C${micrRouting}C ${micrAccount}C ${checkNumber}C`;
+        // Use proper MICR Unicode symbols so they look correct even without the MICR font
+        // ⑆ = transit (around routing), ⑈ = on-us (around check# and account)
+        const micrLine = `\u2446${checkNumber}\u2446  \u2446${micrRouting}\u2446  ${micrAccount}\u2448`;
 
         return `
             <div class="check-container">
@@ -263,7 +265,7 @@ const ChecksOut = () => {
                 <div class="phone-number">${config.phone_number || ''}</div>
                 <div class="check-number">No. ${checkNumber}</div>
                 <div class="account-address">${config.address1 || ''}<br>${config.address2 || ''}</div>
-                <div class="date-line">Date <span>${date}</span></div>
+                <div class="date-line"><span class="date-label">Date</span><span class="date-value">${date}</span></div>
                 <div class="payee-line">
                     <span class="payee-label">Pay to the order of</span>
                     <span class="payee-input">${payToOrderOf}</span>
@@ -271,7 +273,6 @@ const ChecksOut = () => {
                 <div class="amount-box">$${amount}</div>
                 <div class="amount-words">
                     <span class="amount-text">${amountInWords}</span>
-
                 </div>
                 <div class="bank-info">
                     <div class="bank-name">${config.bank_name || ''}</div>
@@ -319,33 +320,52 @@ const ChecksOut = () => {
 ${fontUrl ? `@font-face { font-family: 'customCheckFont'; src: url('${fontUrl}') format('woff'); font-display: swap; }` : ''}
 ${fontUrl ? `@font-face { font-family: 'customMicrFont'; src: url('${fontUrl}') format('woff'); font-display: swap; }` : ''}
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: white; margin: 0; padding: 0; }
+body { background: white; margin: 0; padding: 0; font-family: 'Roboto', Arial, sans-serif; color: #000; }
 @page { margin: 0; size: letter; }
-.check-container { width: 8.5in; height: 3.667in; background: white; border: none; padding: 0; position: relative; margin: 0; page-break-inside: avoid; font-family: 'Roboto', Arial, sans-serif; overflow: hidden; }
-.account-name { position: absolute; top: 0.3in; left: 0.5in; font-size: 14pt; font-weight: 700; color: #000; letter-spacing: 0.3px; text-transform: uppercase; }
-.phone-number { position: absolute; top: 0.55in; left: 0.5in; font-size: 8pt; color: #333; }
-.check-number { position: absolute; top: 0.25in; right: 0.5in; text-align: right; font-size: 16pt; font-weight: 700; color: #000; letter-spacing: 1px; }
-.account-address { position: absolute; top: 0.7in; left: 0.5in; font-size: 8pt; color: #333; line-height: 1.4; }
-.date-line { position: absolute; top: 0.55in; right: 0.5in; text-align: right; font-size: 10pt; color: #000; font-weight: 500; }
-.date-line span { display: inline-block; min-width: 1.2in; border-bottom: 1px solid #333; padding: 0 4px 2px 4px; margin-left: 6px; }
-.payee-line { position: absolute; top: 1.15in; left: 0.5in; right: 1.6in; display: flex; align-items: baseline; font-size: 10pt; }
-.payee-label { font-weight: 600; color: #000; white-space: nowrap; margin-right: 8px; font-size: 9pt; }
-.payee-input { flex: 1; border-bottom: 1px solid #333; font-size: 11pt; color: #000; font-weight: 500; padding: 0 4px 2px 4px; }
-.amount-box { position: absolute; top: 1.12in; right: 0.5in; width: 1.3in; height: 0.28in; display: flex; align-items: center; justify-content: flex-end; border: 1.5px solid #000; background: #fff; padding: 0 8px; font-size: 13pt; font-weight: 700; color: #000; font-family: 'Roboto Mono', monospace; }
-.amount-words { position: absolute; top: 1.5in; left: 0.5in; right: 0.5in; font-size: 9pt; border-bottom: 1px solid #333; min-height: 0.22in; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 4px 2px 4px; color: #000; }
+.check-container { width: 8.5in; height: 3.5in; background: white; border: none; padding: 0; position: relative; margin: 0; page-break-inside: avoid; font-family: 'Roboto', Arial, sans-serif; overflow: hidden; }
+
+/* Header - account info */
+.account-name { position: absolute; top: 0.32in; left: 0.5in; font-size: 13pt; font-weight: 700; color: #000; letter-spacing: 0.3px; }
+.account-address { position: absolute; top: 0.58in; left: 0.5in; font-size: 8.5pt; color: #333; line-height: 1.35; }
+.phone-number { position: absolute; top: 0.95in; left: 0.5in; font-size: 8.5pt; color: #333; }
+
+/* Check number top-right */
+.check-number { position: absolute; top: 0.32in; right: 0.5in; text-align: right; font-size: 14pt; font-weight: 700; color: #000; letter-spacing: 0.5px; }
+
+/* Date - directly under check number, simple */
+.date-line { position: absolute; top: 0.62in; right: 0.5in; text-align: right; font-size: 9.5pt; color: #000; display: flex; align-items: baseline; gap: 6px; }
+.date-line .date-label { font-weight: 600; color: #000; }
+.date-line .date-value { display: inline-block; min-width: 1.1in; border-bottom: 1px solid #555; padding: 0 4px 1px 4px; text-align: center; }
+
+/* Pay to the order of */
+.payee-line { position: absolute; top: 1.2in; left: 0.5in; right: 1.6in; display: flex; align-items: baseline; font-size: 10pt; }
+.payee-label { font-weight: 600; color: #000; white-space: nowrap; margin-right: 10px; font-size: 9.5pt; }
+.payee-input { flex: 1; border-bottom: 1px solid #555; font-size: 11pt; color: #000; font-weight: 500; padding: 0 6px 2px 6px; min-height: 16pt; }
+
+/* Amount box - subtle border */
+.amount-box { position: absolute; top: 1.17in; right: 0.5in; width: 1.3in; height: 0.3in; display: flex; align-items: center; justify-content: flex-end; border: 1px solid #555; background: #fff; padding: 0 8px; font-size: 12.5pt; font-weight: 700; color: #000; font-family: 'Roboto Mono', monospace; }
+
+/* Amount in words - clean, no DOLLARS label */
+.amount-words { position: absolute; top: 1.6in; left: 0.5in; right: 0.5in; font-size: 9.5pt; border-bottom: 1px solid #555; min-height: 0.24in; display: flex; align-items: flex-end; padding: 0 6px 2px 6px; color: #000; }
 .amount-text { flex: 1; color: #000; font-weight: 500; text-transform: capitalize; }
-.dollars-text { font-weight: 700; color: #000; font-size: 9pt; margin-left: 8px; }
-.bank-info { position: absolute; top: 1.85in; left: 0.5in; right: 3.5in; font-size: 9pt; color: #000; line-height: 1.3; }
+
+/* Bank info */
+.bank-info { position: absolute; top: 1.95in; left: 0.5in; right: 3.5in; font-size: 9pt; color: #000; line-height: 1.3; }
 .bank-name { font-weight: 700; font-size: 10pt; color: #000; text-transform: uppercase; letter-spacing: 0.3px; }
-.bank-address { font-size: 8pt; margin-top: 2px; color: #333; }
-.memo-signature { position: absolute; top: 2.35in; left: 0.5in; right: 0.5in; display: grid; grid-template-columns: 2.5in 1fr; gap: 0.5in; }
-.memo { display: flex; align-items: baseline; font-size: 8pt; }
-.memo-label { font-weight: 600; color: #000; margin-right: 6px; }
-.memo-input { flex: 1; border-bottom: 1px solid #333; font-size: 8pt; padding: 0 4px 2px 4px; color: #000; max-width: 2in; }
+.bank-address { font-size: 8.5pt; margin-top: 2px; color: #333; font-weight: 400; }
+
+/* Memo + signature row */
+.memo-signature { position: absolute; top: 2.45in; left: 0.5in; right: 0.5in; display: grid; grid-template-columns: 2.5in 1fr; gap: 0.5in; }
+.memo { display: flex; align-items: baseline; font-size: 9pt; }
+.memo-label { font-weight: 600; color: #000; margin-right: 8px; }
+.memo-input { flex: 1; border-bottom: 1px solid #555; font-size: 9pt; padding: 0 4px 2px 4px; color: #000; max-width: 2in; min-height: 12pt; }
 .signature { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; }
-.signature-line { border-bottom: 1.5px solid #333; width: 100%; max-width: 2.8in; height: 0.3in; margin-bottom: 2px; }
-.signature-label { font-size: 7pt; color: #555; text-align: right; width: 100%; max-width: 2.8in; }
-.micr-line { position: absolute; bottom: 0.35in; left: 0.75in; right: 0.5in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', monospace; font-size: 12pt; letter-spacing: 3px; color: #000; line-height: 1; }
+.signature-line { border-bottom: 1px solid #333; width: 100%; max-width: 2.8in; height: 0.28in; margin-bottom: 2px; }
+.signature-label { font-size: 7.5pt; color: #555; text-align: right; width: 100%; max-width: 2.8in; }
+
+/* MICR line - moved up, proper symbols */
+.micr-line { position: absolute; bottom: 0.22in; left: 0.6in; right: 0.5in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', 'Courier New', monospace; font-size: 13pt; letter-spacing: 2px; color: #000; line-height: 1; font-weight: 500; }
+
 @media print {
   body { background: white; margin: 0; padding: 0; }
   @page { margin: 0; size: letter; }
