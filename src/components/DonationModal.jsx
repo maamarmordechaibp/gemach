@@ -27,6 +27,22 @@ const DonationModal = ({ isOpen, onClose, customer, onDonationSuccess }) => {
 
             if (error) throw error;
 
+            // The add_donation procedure records the donation and credits the FEES
+            // account but does not debit the donor. Deduct it from the donor's balance here.
+            const { data: freshCustomer, error: fetchError } = await supabase
+                .from('customers')
+                .select('balance')
+                .eq('id', customer.id)
+                .single();
+            if (fetchError) throw fetchError;
+
+            const newBalance = parseFloat(freshCustomer.balance) - donationAmount;
+            const { error: balanceError } = await supabase
+                .from('customers')
+                .update({ balance: newBalance })
+                .eq('id', customer.id);
+            if (balanceError) throw balanceError;
+
             toast({ title: "Donation Successful!", description: `Thank you for the donation of $${donationAmount.toLocaleString()}.` });
             onDonationSuccess();
             handleClose();
