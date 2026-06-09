@@ -2,10 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, X, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/use-toast';
 import { useData } from '@/contexts/DataContext';
 import { supabase } from '@/lib/customSupabaseClient';
-import TransactionForm from './add-transaction/TransactionForm';
 import TransactionSummary from './add-transaction/TransactionSummary';
 import {
   AlertDialog,
@@ -164,11 +164,20 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
                 <h2 className="text-2xl font-bold text-foreground">{customer.first_name} {customer.last_name}</h2>
                 <p className="text-muted-foreground">Remaining Balance: <span className="font-bold text-red-400">${parseFloat(loan.amount).toLocaleString()}</span></p>
               </div>
-              <TransactionForm
-                transactionState={transactionState}
-                setTransactionState={setTransactionState}
-                isPaymentForm={true}
-              />
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Payment Amount</label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={transactionState.creditCash}
+                  onChange={(e) => setTransactionState(prev => ({ ...prev, creditCash: e.target.value }))}
+                  className="mt-1"
+                  autoFocus
+                />
+              </div>
             </div>
             <div className="p-6 border-t border-border sticky bottom-0 bg-card">
               <TransactionSummary totalCredit={totalCredit} totalDebit={0} onProcess={handleProcessPayment} isProcessing={isProcessing} />

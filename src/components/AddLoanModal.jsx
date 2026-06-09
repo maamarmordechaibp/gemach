@@ -10,7 +10,6 @@ import { supabase } from '@/lib/customSupabaseClient';
 import CustomerSearch from './add-transaction/CustomerSearch';
 import SelectedCustomerHeader from './add-transaction/SelectedCustomerHeader';
 import AdminPasswordDialog from './AdminPasswordDialog';
-import TransactionForm from './add-transaction/TransactionForm';
 
 const AddLoanModal = ({ isOpen, onClose }) => {
   const { customers, refreshData } = useData();
@@ -132,11 +131,20 @@ const AddLoanModal = ({ isOpen, onClose }) => {
                   <>
                     <SelectedCustomerHeader customer={selectedCustomer} onClear={() => setSelectedCustomer(null)} />
                     <div className="space-y-4">
-                      <TransactionForm
-                        transactionState={transactionState}
-                        setTransactionState={setTransactionState}
-                        isLoanForm={true}
-                      />
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Loan Amount</label>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={transactionState.debitCash}
+                          onChange={(e) => setTransactionState(prev => ({ ...prev, debitCash: e.target.value }))}
+                          className="mt-1"
+                          autoFocus
+                        />
+                      </div>
                       <div>
                         <label className="text-sm font-medium text-muted-foreground">Due Date</label>
                         <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="mt-1" />
