@@ -75,6 +75,7 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
 
       const currentLoanPayment = Math.min(paymentAmount, parseFloat(loan.amount));
       transactionsToInsert.push({ id: creditTxId, account_number: customer.account_number, type: 'credit', amount: currentLoanPayment, date: txDate, status: 'completed', loan_id: loan.id });
+      balanceChange += currentLoanPayment;
       
       const remainingLoanAmount = parseFloat(loan.amount) - currentLoanPayment;
       const newLoanStatus = remainingLoanAmount <= 0.001 ? 'paid' : 'active';
@@ -92,6 +93,7 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
           const nextLoanStatus = remainingNextLoan <= 0.001 ? 'paid' : 'active';
           await supabase.from('loans').update({ amount: Math.max(0, remainingNextLoan), status: nextLoanStatus }).eq('id', nextLoan.id);
 
+          balanceChange += nextLoanPayment;
           const finalExcess = excessAmount - nextLoanPayment;
           if (finalExcess > 0) {
             balanceChange += finalExcess;
