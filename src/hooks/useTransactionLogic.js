@@ -152,8 +152,11 @@
 
             if (onSuccess) onSuccess();
 
+            return true;
+
         } catch (error) {
             toast({ title: "Transaction Failed", description: error.message, variant: "destructive" });
+            return false;
         } finally {
             setIsProcessing(false);
         }

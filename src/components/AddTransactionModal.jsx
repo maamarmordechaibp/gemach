@@ -95,7 +95,7 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
   const [customerInitialData, setCustomerInitialData] = useState({});
   
   const [loanPrompt, setLoanPrompt] = useState({ show: false, shortfall: 0, dueDate: '', loanOption: 'shortfall' });
-  const [repaymentPrompt, setRepaymentPrompt] = useState({ show: false, loan: null });
+  const [repaymentPrompt, setRepaymentPrompt] = useState({ show: false, loan: null, recipient: null, isTransfer: false, amount: 0 });
   const [passwordDialog, setPasswordDialog] = useState({ show: false, onConfirm: null });
 
   const customerLoans = useMemo(() => {
@@ -104,6 +104,17 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
     const allAccountIds = allAccounts.map(c => c.id);
     return loans.filter(l => allAccountIds.includes(l.customer_id) && l.status !== 'paid');
   }, [selectedCustomer, customers, loans]);
+
+  const recipientCustomer = useMemo(() => {
+    const toAccount = transactionState?.transferDetails?.toAccount;
+    if (!toAccount) return null;
+    return (customers || []).find(c => c.account_number === toAccount) || null;
+  }, [transactionState?.transferDetails?.toAccount, customers]);
+
+  const recipientLoans = useMemo(() => {
+    if (!recipientCustomer || !loans) return [];
+    return loans.filter(l => l.customer_id === recipientCustomer.id && l.status !== 'paid');
+  }, [recipientCustomer, loans]);
   
   const handleSaveCustomer = async (customerData) => {
     try {
@@ -171,7 +182,13 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
     }
 
     if (totalCredit > 0 && customerLoans.length > 0) {
-      setRepaymentPrompt({ show: true, loan: customerLoans[0] });
+      setRepaymentPrompt({ show: true, loan: customerLoans[0], recipient: null, isTransfer: false, amount: totalCredit });
+      return;
+    }
+
+    const transferAmount = parseFloat(transactionState.transferDetails?.amount) || 0;
+    if (transferAmount > 0 && recipientCustomer && recipientLoans.length > 0) {
+      setRepaymentPrompt({ show: true, loan: recipientLoans[0], recipient: recipientCustomer, isTransfer: true, amount: transferAmount });
       return;
     }
 
@@ -203,9 +220,34 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
     setLoanPrompt({ show: false, shortfall: 0, dueDate: '', loanOption: 'shortfall' });
   };
 
+  const applyTransferToRecipientLoan = async (recipient, loan, transferAmount) => {
+    try {
+      const payment = Math.min(transferAmount, parseFloat(loan.amount));
+      const remaining = parseFloat(loan.amount) - payment;
+      const newStatus = remaining <= 0.001 ? 'paid' : 'active';
+      const { error } = await supabase
+        .from('loans')
+        .update({ amount: Math.max(0, remaining), status: newStatus })
+        .eq('id', loan.id);
+      if (error) throw error;
+      toast({ title: "Loan Updated", description: `Applied $${payment.toFixed(2)} from the transfer toward ${recipient.first_name} ${recipient.last_name}'s loan.` });
+      refreshData();
+    } catch (error) {
+      toast({ title: "Loan Repayment Failed", description: error.message, variant: "destructive" });
+    }
+  };
+
   const handleRepaymentConfirm = async (applyToLoan) => {
-    setRepaymentPrompt({ show: false, loan: null });
-    await handleSubmit({ loanToRepay: applyToLoan ? repaymentPrompt.loan : null });
+    const prompt = repaymentPrompt;
+    setRepaymentPrompt({ show: false, loan: null, recipient: null, isTransfer: false, amount: 0 });
+    if (prompt.isTransfer) {
+      const success = await handleSubmit();
+      if (success && applyToLoan && prompt.recipient && prompt.loan) {
+        await applyTransferToRecipientLoan(prompt.recipient, prompt.loan, prompt.amount);
+      }
+    } else {
+      await handleSubmit({ loanToRepay: applyToLoan ? prompt.loan : null });
+    }
   };
 
   return (
@@ -259,7 +301,7 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
             </AlertDialogContent>
           </AlertDialog>
           <LoanChoiceDialog isOpen={loanPrompt.show} onClose={() => setLoanPrompt({ ...loanPrompt, show: false })} onConfirm={handleLoanPromptConfirm} totalDebit={totalDebit} shortfall={loanPrompt.shortfall} dueDate={loanPrompt.dueDate} setDueDate={(d) => setLoanPrompt({...loanPrompt, dueDate: d})} loanOption={loanPrompt.loanOption} setLoanOption={(o) => setLoanPrompt({...loanPrompt, loanOption: o})} isProcessing={isProcessing} />
-          <RepaymentDialog isOpen={repaymentPrompt.show} onClose={() => setRepaymentPrompt({ show: false, loan: null })} onConfirm={handleRepaymentConfirm} loan={repaymentPrompt.loan} totalCredit={totalCredit} />
+          <RepaymentDialog isOpen={repaymentPrompt.show} onClose={() => setRepaymentPrompt({ show: false, loan: null, recipient: null, isTransfer: false, amount: 0 })} onConfirm={handleRepaymentConfirm} loan={repaymentPrompt.loan} totalCredit={repaymentPrompt.amount || totalCredit} />
           <AdminPasswordDialog isOpen={passwordDialog.show} onClose={() => setPasswordDialog({ show: false, onConfirm: null })} onConfirm={passwordDialog.onConfirm} />
         </>
       )}
