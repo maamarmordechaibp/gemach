@@ -10,7 +10,7 @@ const CustomerSearch = ({ customers, onSelect, onAddNew, searchTerm, setSearchTe
     const filteredCustomers = customers.filter(c =>
         (c.first_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (c.last_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.account_number || '').includes(searchTerm) ||
+        (c.account_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (c.phone_number && c.phone_number.includes(searchTerm))
     );
 

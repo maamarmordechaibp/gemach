@@ -26,7 +26,7 @@ const TransferForm = ({ transactionState, setTransactionState }) => {
         return customers.filter(c =>
             c.first_name.toLowerCase().includes(recipientSearchTerm.toLowerCase()) ||
             c.last_name.toLowerCase().includes(recipientSearchTerm.toLowerCase()) ||
-            c.account_number.includes(recipientSearchTerm)
+            (c.account_number || '').toLowerCase().includes(recipientSearchTerm.toLowerCase())
         ).slice(0, 5);
     }, [recipientSearchTerm, customers]);
 

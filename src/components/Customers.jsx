@@ -149,12 +149,12 @@ import React, { useState, useMemo } from 'react';
             return customersWithSubAccounts.filter(customer =>
                 (customer.first_name?.toLowerCase() || '').includes(searchLower) ||
                 (customer.last_name?.toLowerCase() || '').includes(searchLower) ||
-                (customer.account_number?.toString() || '').includes(searchTerm) ||
+                (customer.account_number?.toString().toLowerCase() || '').includes(searchLower) ||
                 (customer.phone_number && customer.phone_number.includes(searchTerm)) ||
                 (customer.sub_accounts && customer.sub_accounts.some(sub =>
                     (sub.first_name?.toLowerCase() || '').includes(searchLower) ||
                     (sub.last_name?.toLowerCase() || '').includes(searchLower) ||
-                    (sub.account_number?.toString() || '').includes(searchTerm)
+                    (sub.account_number?.toString().toLowerCase() || '').includes(searchLower)
                 ))
             );
         }, [customersWithSubAccounts, searchTerm]);
