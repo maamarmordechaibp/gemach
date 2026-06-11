@@ -185,9 +185,9 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
     setLoanPrompt({ show: false, shortfall: 0, dueDate: '', loanOption: 'shortfall' });
   };
 
-  const applyTransferToRecipientLoan = async (recipient, loan, transferAmount) => {
+  const applyPaymentToLoan = async (payer, loan, paymentAmount) => {
     try {
-      const payment = Math.min(transferAmount, parseFloat(loan.amount));
+      const payment = Math.min(paymentAmount, parseFloat(loan.amount));
       const remaining = parseFloat(loan.amount) - payment;
       const newStatus = remaining <= 0.001 ? 'paid' : 'active';
       const { error } = await supabase
@@ -195,7 +195,8 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
         .update({ amount: Math.max(0, remaining), status: newStatus })
         .eq('id', loan.id);
       if (error) throw error;
-      toast({ title: "Loan Updated", description: `Applied $${payment.toFixed(2)} from the transfer toward ${recipient.first_name} ${recipient.last_name}'s loan.` });
+      const payerName = payer ? `${payer.first_name} ${payer.last_name}'s` : 'the';
+      toast({ title: "Loan Updated", description: `Applied $${payment.toFixed(2)} toward ${payerName} loan.` });
       refreshData();
     } catch (error) {
       toast({ title: "Loan Repayment Failed", description: error.message, variant: "destructive" });
@@ -204,14 +205,14 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
 
   const handleRepaymentConfirm = async (applyToLoan) => {
     const prompt = repaymentPrompt;
+    // The credit/transfer is added to the balance by process_transaction_v2.
+    // When applying to a loan we only reduce the loan record here (no extra
+    // balance change) to avoid double-counting the payment.
+    const target = prompt.recipient || selectedCustomer;
     setRepaymentPrompt({ show: false, loan: null, recipient: null, isTransfer: false, amount: 0 });
-    if (prompt.isTransfer) {
-      const success = await handleSubmit();
-      if (success && applyToLoan && prompt.recipient && prompt.loan) {
-        await applyTransferToRecipientLoan(prompt.recipient, prompt.loan, prompt.amount);
-      }
-    } else {
-      await handleSubmit({ loanToRepay: applyToLoan ? prompt.loan : null });
+    const success = await handleSubmit();
+    if (success && applyToLoan && prompt.loan) {
+      await applyPaymentToLoan(target, prompt.loan, prompt.amount);
     }
   };
   
