@@ -203,16 +203,17 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
     }
   };
 
-  const handleRepaymentConfirm = async (applyToLoan) => {
+  const handleRepaymentConfirm = async (applyToLoan, applyAmount = 0) => {
     const prompt = repaymentPrompt;
     // The credit/transfer is added to the balance by process_transaction_v2.
-    // When applying to a loan we only reduce the loan record here (no extra
-    // balance change) to avoid double-counting the payment.
+    // When applying to a loan we additionally reduce the loan record by the
+    // amount the user chose (capped to the loan balance), so partial payments
+    // only reduce the loan by that amount instead of paying it off entirely.
     const target = prompt.recipient || selectedCustomer;
     setRepaymentPrompt({ show: false, loan: null, recipient: null, isTransfer: false, amount: 0 });
     const success = await handleSubmit();
-    if (success && applyToLoan && prompt.loan) {
-      await applyPaymentToLoan(target, prompt.loan, prompt.amount);
+    if (success && applyToLoan && prompt.loan && applyAmount > 0) {
+      await applyPaymentToLoan(target, prompt.loan, applyAmount);
     }
   };
   

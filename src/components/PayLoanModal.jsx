@@ -1,12 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Coins, X, AlertTriangle } from 'lucide-react';
+import { Coins, X, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/use-toast';
 import { useData } from '@/contexts/DataContext';
 import { supabase } from '@/lib/customSupabaseClient';
-import TransactionSummary from './add-transaction/TransactionSummary';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,123 +19,155 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+const fmt = (n) => parseFloat(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const PayLoanModal = ({ isOpen, onClose, loan }) => {
   const { customers, loans, refreshData } = useData();
-  const [transactionState, setTransactionState] = useState({
-      creditCash: '',
-      creditChecks: [],
-  });
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [isProcessing, setIsProcessing] = useState(false);
-  const [overpaymentPrompt, setOverpaymentPrompt] = useState({ show: false, excessAmount: 0, nextLoan: null });
+  const [overpaymentPrompt, setOverpaymentPrompt] = useState({ show: false, leftover: 0 });
 
   const customer = useMemo(() => customers.find(c => c.id === loan?.customer_id), [customers, loan]);
 
-  const totalCredit = useMemo(() => {
-    const cash = parseFloat(transactionState.creditCash) || 0;
-    const checks = transactionState.creditChecks.reduce((sum, check) => sum + (parseFloat(check.amount) || 0), 0);
-    return cash + checks;
-  }, [transactionState.creditCash, transactionState.creditChecks]);
+  // All unpaid loans for this customer, oldest due date first.
+  const customerLoans = useMemo(() => {
+    if (!customer) return [];
+    return loans
+      .filter(l => l.customer_id === customer.id && l.status !== 'paid' && parseFloat(l.amount) > 0)
+      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+  }, [loans, customer]);
 
-  const resetForm = () => {
-    setTransactionState({ creditCash: '', creditChecks: [] });
-    setIsProcessing(false);
-    setOverpaymentPrompt({ show: false, excessAmount: 0, nextLoan: null });
+  // Initialize selection whenever the modal opens.
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedIds(new Set(customerLoans.map(l => l.id)));
+      setPaymentAmount('');
+      setOverpaymentPrompt({ show: false, leftover: 0 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, loan?.id]);
+
+  const paymentNum = parseFloat(paymentAmount) || 0;
+
+  // Auto-allocate the payment across selected loans, oldest first.
+  const allocations = useMemo(() => {
+    let remaining = paymentNum;
+    return customerLoans.map(l => {
+      if (!selectedIds.has(l.id)) return { loan: l, alloc: 0 };
+      const amt = parseFloat(l.amount);
+      const alloc = Math.min(remaining, amt);
+      remaining = Math.max(0, remaining - alloc);
+      return { loan: l, alloc };
+    });
+  }, [customerLoans, selectedIds, paymentNum]);
+
+  const totalAllocated = useMemo(() => allocations.reduce((s, a) => s + a.alloc, 0), [allocations]);
+  const leftover = Math.max(0, paymentNum - totalAllocated);
+  const totalSelectedOwed = useMemo(
+    () => customerLoans.filter(l => selectedIds.has(l.id)).reduce((s, l) => s + parseFloat(l.amount), 0),
+    [customerLoans, selectedIds]
+  );
+
+  const toggleLoan = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const fillSelectedTotal = () => {
+    setPaymentAmount(totalSelectedOwed > 0 ? totalSelectedOwed.toFixed(2) : '');
   };
 
   const handleClose = () => {
-    resetForm();
+    setIsProcessing(false);
+    setOverpaymentPrompt({ show: false, leftover: 0 });
     onClose();
   };
 
-  const handleProcessPayment = async () => {
-    if (!customer || !loan) return;
-    if (totalCredit <= 0) {
+  const handleProcessPayment = () => {
+    if (!customer) return;
+    if (paymentNum <= 0) {
       toast({ title: "No payment amount", description: "Please enter a payment amount.", variant: "destructive" });
       return;
     }
-
-    const loanAmount = parseFloat(loan.amount);
-    if (totalCredit > loanAmount) {
-      const excessAmount = totalCredit - loanAmount;
-      const nextLoan = loans.find(l => l.customer_id === customer.id && l.status !== 'paid' && l.id !== loan.id);
-      setOverpaymentPrompt({ show: true, excessAmount, nextLoan });
+    if (totalAllocated <= 0) {
+      toast({ title: "No loan selected", description: "Select at least one loan to pay.", variant: "destructive" });
       return;
     }
-
-    await executePayment(totalCredit);
+    if (leftover > 0.001) {
+      setOverpaymentPrompt({ show: true, leftover });
+      return;
+    }
+    executePayment(false);
   };
 
-  const executePayment = async (paymentAmount, excessAmount = 0, applyToNextLoan = false) => {
+  const executePayment = async (addLeftoverToBalance) => {
+    if (!customer) return;
     setIsProcessing(true);
     try {
-      const creditTxId = `REPAY-${Date.now()}-${customer.id.slice(0, 8)}`;
-      const transactionsToInsert = [];
-      const checksInToInsert = [];
-      let balanceChange = 0;
       const txDate = new Date().toISOString();
+      const transactionsToInsert = [];
+      let balanceChange = 0;
 
-      const currentLoanPayment = Math.min(paymentAmount, parseFloat(loan.amount));
-      transactionsToInsert.push({ id: creditTxId, account_number: customer.account_number, type: 'credit', amount: currentLoanPayment, date: txDate, status: 'completed', loan_id: loan.id });
-      balanceChange += currentLoanPayment;
-      
-      const remainingLoanAmount = parseFloat(loan.amount) - currentLoanPayment;
-      const newLoanStatus = remainingLoanAmount <= 0.001 ? 'paid' : 'active';
-      await supabase.from('loans').update({ amount: Math.max(0, remainingLoanAmount), status: newLoanStatus }).eq('id', loan.id);
+      for (const { loan: l, alloc } of allocations) {
+        if (alloc <= 0) continue;
+        const remaining = parseFloat(l.amount) - alloc;
+        const newStatus = remaining <= 0.001 ? 'paid' : (l.status === 'overdue' ? 'overdue' : 'active');
 
-      if (excessAmount > 0) {
-        if (applyToNextLoan && overpaymentPrompt.nextLoan) {
-          const nextLoan = overpaymentPrompt.nextLoan;
-          const nextLoanPayment = Math.min(excessAmount, parseFloat(nextLoan.amount));
-          
-          const nextRepayTxId = `REPAY-NEXT-${Date.now()}-${customer.id.slice(0, 8)}`;
-          transactionsToInsert.push({ id: nextRepayTxId, account_number: customer.account_number, type: 'credit', amount: nextLoanPayment, date: txDate, status: 'completed', loan_id: nextLoan.id });
+        const { error: loanError } = await supabase
+          .from('loans')
+          .update({ amount: Math.max(0, remaining), status: newStatus })
+          .eq('id', l.id);
+        if (loanError) throw loanError;
 
-          const remainingNextLoan = parseFloat(nextLoan.amount) - nextLoanPayment;
-          const nextLoanStatus = remainingNextLoan <= 0.001 ? 'paid' : 'active';
-          await supabase.from('loans').update({ amount: Math.max(0, remainingNextLoan), status: nextLoanStatus }).eq('id', nextLoan.id);
+        transactionsToInsert.push({
+          id: `REPAY-${Date.now()}-${l.id.slice(0, 8)}`,
+          account_number: customer.account_number,
+          type: 'credit',
+          amount: alloc,
+          date: txDate,
+          status: 'completed',
+          loan_id: l.id,
+          memo: 'Loan Repayment',
+        });
+        balanceChange += alloc;
+      }
 
-          balanceChange += nextLoanPayment;
-          const finalExcess = excessAmount - nextLoanPayment;
-          if (finalExcess > 0) {
-            balanceChange += finalExcess;
-          }
-        } else {
-          balanceChange += excessAmount;
-        }
+      if (addLeftoverToBalance && leftover > 0.001) {
+        transactionsToInsert.push({
+          id: `CREDIT-${Date.now()}-${customer.id.slice(0, 8)}`,
+          account_number: customer.account_number,
+          type: 'credit',
+          amount: leftover,
+          date: txDate,
+          status: 'completed',
+          memo: 'Overpayment Credit',
+        });
+        balanceChange += leftover;
       }
 
       if (transactionsToInsert.length > 0) {
-        await supabase.from('transactions').insert(transactionsToInsert);
-      }
-
-      transactionState.creditChecks.forEach(check => {
-        if (check.amount > 0 && check.checkNumber) {
-          checksInToInsert.push({ transaction_id: creditTxId, account_number: customer.account_number, check_number: check.checkNumber, amount: check.amount, date: txDate, status: 'pending' });
-        }
-      });
-      if (checksInToInsert.length > 0) {
-        await supabase.from('checks_in').insert(checksInToInsert);
+        const { error: txError } = await supabase.from('transactions').insert(transactionsToInsert);
+        if (txError) throw txError;
       }
 
       if (balanceChange > 0) {
-        const newBalance = parseFloat(customer.balance) + balanceChange;
-        await supabase.from('customers').update({ balance: newBalance }).eq('id', customer.id);
+        const newBalance = (parseFloat(customer.balance) || 0) + balanceChange;
+        const { error: balError } = await supabase.from('customers').update({ balance: newBalance }).eq('id', customer.id);
+        if (balError) throw balError;
       }
 
-      toast({ title: "Success", description: "Loan payment processed successfully." });
+      toast({ title: "Success", description: `Applied $${fmt(totalAllocated)} across ${allocations.filter(a => a.alloc > 0).length} loan(s).` });
       refreshData();
       handleClose();
-
     } catch (error) {
       toast({ title: "Payment Failed", description: error.message, variant: "destructive" });
-    } finally {
       setIsProcessing(false);
-      setOverpaymentPrompt({ show: false, excessAmount: 0, nextLoan: null });
+      setOverpaymentPrompt({ show: false, leftover: 0 });
     }
-  };
-
-  const handleOverpaymentChoice = (applyToNext) => {
-    executePayment(totalCredit, overpaymentPrompt.excessAmount, applyToNext);
   };
 
   if (!customer) return null;
@@ -158,46 +191,110 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
               </div>
               <Button variant="ghost" size="sm" onClick={handleClose}><X className="h-5 w-5" /></Button>
             </div>
+
             <div className="p-6 space-y-6 overflow-y-auto flex-1">
               <div className="bg-secondary/50 p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">Paying loan for</p>
+                <p className="text-sm text-muted-foreground">Paying loans for</p>
                 <h2 className="text-2xl font-bold text-foreground">{customer.first_name} {customer.last_name}</h2>
-                <p className="text-muted-foreground">Remaining Balance: <span className="font-bold text-red-400">${parseFloat(loan.amount).toLocaleString()}</span></p>
+                <p className="text-muted-foreground">Total outstanding (selected): <span className="font-bold text-red-400">${fmt(totalSelectedOwed)}</span></p>
               </div>
+
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Payment Amount</label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={transactionState.creditCash}
-                  onChange={(e) => setTransactionState(prev => ({ ...prev, creditCash: e.target.value }))}
-                  className="mt-1"
-                  autoFocus
-                />
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    autoFocus
+                  />
+                  <Button type="button" variant="outline" onClick={fillSelectedTotal} className="whitespace-nowrap">
+                    Pay Full
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  The amount is automatically applied to the selected loans, oldest due date first.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Loans</p>
+                {customerLoans.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No outstanding loans for this customer.</p>
+                ) : (
+                  allocations.map(({ loan: l, alloc }) => {
+                    const selected = selectedIds.has(l.id);
+                    const remaining = parseFloat(l.amount) - alloc;
+                    const willBePaid = selected && alloc > 0 && remaining <= 0.001;
+                    return (
+                      <div
+                        key={l.id}
+                        className={cn(
+                          'flex items-center gap-3 p-3 rounded-lg border transition-colors',
+                          selected ? 'border-primary/40 bg-secondary/40' : 'border-border bg-transparent opacity-60'
+                        )}
+                      >
+                        <Checkbox checked={selected} onCheckedChange={() => toggleLoan(l.id)} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-foreground">${fmt(l.amount)}</span>
+                            {willBePaid && (
+                              <span className="inline-flex items-center gap-1 text-xs text-green-400">
+                                <CheckCircle2 className="h-3 w-3" /> Paid off
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Due {l.due_date ? new Date(l.due_date).toLocaleDateString() : '—'} · {l.status}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className={cn('font-semibold', alloc > 0 ? 'text-green-400' : 'text-muted-foreground')}>
+                            {alloc > 0 ? `-$${fmt(alloc)}` : '$0.00'}
+                          </p>
+                          {selected && alloc > 0 && (
+                            <p className="text-xs text-muted-foreground">Remaining ${fmt(Math.max(0, remaining))}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
-            <div className="p-6 border-t border-border sticky bottom-0 bg-card">
-              <TransactionSummary totalCredit={totalCredit} totalDebit={0} onProcess={handleProcessPayment} isProcessing={isProcessing} />
+
+            <div className="p-6 border-t border-border bg-card">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Applied to loans: <span className="font-bold text-green-400">${fmt(totalAllocated)}</span></p>
+                  {leftover > 0.001 && (
+                    <p className="text-sm text-yellow-400 flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" /> Leftover ${fmt(leftover)} exceeds selected loans
+                    </p>
+                  )}
+                </div>
+                <Button onClick={handleProcessPayment} disabled={isProcessing} className="bg-gradient-to-r from-purple-500 to-indigo-500 min-w-[160px]">
+                  {isProcessing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : 'Process Payment'}
+                </Button>
+              </div>
             </div>
           </motion.div>
+
           <AlertDialog open={overpaymentPrompt.show}>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="text-yellow-400" /> Overpayment Detected</AlertDialogTitle>
                 <AlertDialogDescription>
-                  The payment of ${totalCredit.toLocaleString()} exceeds the loan balance by ${overpaymentPrompt.excessAmount.toLocaleString()}.
-                  {overpaymentPrompt.nextLoan ? " This customer has another loan." : ""}
+                  The payment exceeds the selected loans by ${fmt(overpaymentPrompt.leftover)}. What would you like to do with the leftover?
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                {overpaymentPrompt.nextLoan && (
-                  <AlertDialogAction onClick={() => handleOverpaymentChoice(true)}>Apply to Next Loan</AlertDialogAction>
-                )}
-                <AlertDialogAction onClick={() => handleOverpaymentChoice(false)}>Add to Customer Balance</AlertDialogAction>
-                <AlertDialogCancel onClick={() => setOverpaymentPrompt({ show: false, excessAmount: 0, nextLoan: null })}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => executePayment(true)}>Add leftover to balance</AlertDialogAction>
+                <AlertDialogCancel onClick={() => setOverpaymentPrompt({ show: false, leftover: 0 })}>Cancel</AlertDialogCancel>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>

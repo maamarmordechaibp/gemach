@@ -38,9 +38,9 @@
                 { data: systemSettingsData, error: systemSettingsError },
               ] = await Promise.all([
                 supabase.from('customers').select('*'),
-                supabase.from('transactions').select('*'),
-                supabase.from('checks_in').select('*'),
-                supabase.from('checks_out').select('*'),
+                supabase.from('transactions').select('*').order('date', { ascending: false }).limit(50000),
+                supabase.from('checks_in').select('*').order('date', { ascending: false }).limit(50000),
+                supabase.from('checks_out').select('*').order('date', { ascending: false }).limit(50000),
                 supabase.from('loans').select('*'),
                 supabase.from('alerts').select('*'),
                 supabase.from('document_templates').select('*'),
