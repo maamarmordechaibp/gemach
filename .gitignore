@@ -27,3 +27,12 @@ dist-ssr
 .env
 .env.local
 .env.production
+
+# Supabase local/temp files and credentials
+supabase/.temp/
+supabase/.branches/
+.supabase/
+
+# Local data backups (may contain sensitive financial data)
+balance_backup_*.json
+
