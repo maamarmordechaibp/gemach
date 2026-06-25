@@ -133,7 +133,9 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
           loan_id: l.id,
           memo: 'Loan Repayment',
         });
-        balanceChange += alloc;
+        // A loan repayment reduces the loan but does NOT add to the customer's
+        // spendable balance — that cash goes back to the fund. Only an
+        // overpayment leftover (handled below) becomes a balance credit.
       }
 
       if (addLeftoverToBalance && leftover > 0.001) {
