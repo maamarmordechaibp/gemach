@@ -230,6 +230,25 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
         .update({ amount: Math.max(0, remaining), status: newStatus })
         .eq('id', loan.id);
       if (error) throw error;
+
+      // The credit was already added to the balance by process_transaction_v2.
+      // Since this portion is being applied to the loan (not kept as savings),
+      // deduct it back out so the balance nets to zero for the applied amount.
+      if (payer && payment > 0) {
+        const { data: fresh, error: fetchError } = await supabase
+          .from('customers')
+          .select('balance')
+          .eq('id', payer.id)
+          .single();
+        if (fetchError) throw fetchError;
+        const newBalance = (parseFloat(fresh?.balance) || 0) - payment;
+        const { error: balError } = await supabase
+          .from('customers')
+          .update({ balance: newBalance })
+          .eq('id', payer.id);
+        if (balError) throw balError;
+      }
+
       const payerName = payer ? `${payer.first_name} ${payer.last_name}'s` : 'the';
       toast({ title: "Loan Updated", description: `Applied $${payment.toFixed(2)} toward ${payerName} loan.` });
       refreshData();
