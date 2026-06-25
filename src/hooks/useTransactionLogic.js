@@ -127,7 +127,7 @@
         }));
 
         try {
-            const { error } = await supabase.rpc('process_transaction_v2', {
+            const { data, error } = await supabase.rpc('process_transaction_v2', {
                 p_customer_id: selectedCustomer.id,
                 p_account_number: selectedCustomer.account_number,
                 p_credit_cash: parseFloat(transactionState.creditCash) || 0,
@@ -152,11 +152,11 @@
 
             if (onSuccess) onSuccess();
 
-            return true;
+            return { success: true, transactionIds: (data && data.transaction_ids) || [] };
 
         } catch (error) {
             toast({ title: "Transaction Failed", description: error.message, variant: "destructive" });
-            return false;
+            return { success: false, transactionIds: [] };
         } finally {
             setIsProcessing(false);
         }

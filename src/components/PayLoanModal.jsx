@@ -112,6 +112,14 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
       const transactionsToInsert = [];
       let balanceChange = 0;
 
+      // Whether this payment is split across multiple destinations (more than one
+      // loan, or a loan plus a leftover credit). When split, each row notes that
+      // it is one part of the larger payment so the log is fully specified.
+      const paidLoanCount = allocations.filter(a => a.alloc > 0).length;
+      const hasLeftover = addLeftoverToBalance && leftover > 0.001;
+      const isSplit = paidLoanCount > 1 || (paidLoanCount >= 1 && hasLeftover);
+      const splitNote = isSplit ? ` (part of $${fmt(paymentNum)} payment)` : '';
+
       for (const { loan: l, alloc } of allocations) {
         if (alloc <= 0) continue;
         const remaining = parseFloat(l.amount) - alloc;
@@ -131,7 +139,7 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
           date: txDate,
           status: 'completed',
           loan_id: l.id,
-          memo: 'Loan Repayment',
+          memo: `Loan Repayment${splitNote}`,
         });
         // A loan repayment reduces the loan but does NOT add to the customer's
         // spendable balance — that cash goes back to the fund. Only an
@@ -146,7 +154,7 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
           amount: leftover,
           date: txDate,
           status: 'completed',
-          memo: 'Overpayment Credit',
+          memo: `Overpayment Credit (leftover from $${fmt(paymentNum)} payment)`,
         });
         balanceChange += leftover;
       }

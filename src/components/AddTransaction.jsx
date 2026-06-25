@@ -185,7 +185,7 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
     setLoanPrompt({ show: false, shortfall: 0, dueDate: '', loanOption: 'shortfall' });
   };
 
-  const applyPaymentToLoan = async (payer, loan, paymentAmount) => {
+  const applyPaymentToLoan = async (payer, loan, paymentAmount, depositTxIds = []) => {
     try {
       const payment = Math.min(paymentAmount, parseFloat(loan.amount));
       const remaining = parseFloat(loan.amount) - payment;
@@ -214,6 +214,50 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
         if (balError) throw balError;
       }
 
+      // Split the original cash deposit into two clearly-labelled rows so the
+      // transaction log shows exactly how the money was divided: the part that
+      // went to the loan and the part (if any) that stayed in the account.
+      const cashTxId = (depositTxIds || []).find(id => id.startsWith('CREDIT-CASH-'));
+      if (cashTxId && payment > 0) {
+        const { data: dep, error: depErr } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('id', cashTxId)
+          .single();
+        if (depErr) throw depErr;
+
+        const depositTotal = parseFloat(dep.amount);
+        const accountPortion = Math.max(0, depositTotal - payment);
+        const splitNote = accountPortion > 0.001 ? ` (part of $${depositTotal.toFixed(2)} deposit)` : '';
+
+        // Loan-repayment row for the part applied to the loan.
+        const repayRow = {
+          id: `REPAY-${Date.now()}-${loan.id.slice(0, 8)}`,
+          account_number: payer.account_number,
+          type: 'credit',
+          amount: payment,
+          date: dep.date,
+          status: 'completed',
+          loan_id: loan.id,
+          memo: `Loan Repayment${splitNote}`,
+        };
+        const { error: repayErr } = await supabase.from('transactions').insert([repayRow]);
+        if (repayErr) throw repayErr;
+
+        if (accountPortion > 0.001) {
+          // Part stayed in the account — relabel the original deposit row.
+          const { error: updErr } = await supabase
+            .from('transactions')
+            .update({ amount: accountPortion, memo: `Deposit to balance (part of $${depositTotal.toFixed(2)} deposit)` })
+            .eq('id', cashTxId);
+          if (updErr) throw updErr;
+        } else {
+          // Whole deposit went to the loan — remove the now-redundant deposit row.
+          const { error: delErr } = await supabase.from('transactions').delete().eq('id', cashTxId);
+          if (delErr) throw delErr;
+        }
+      }
+
       const payerName = payer ? `${payer.first_name} ${payer.last_name}'s` : 'the';
       toast({ title: "Loan Updated", description: `Applied $${payment.toFixed(2)} toward ${payerName} loan.` });
       refreshData();
@@ -230,9 +274,9 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
     // only reduce the loan by that amount instead of paying it off entirely.
     const target = prompt.recipient || selectedCustomer;
     setRepaymentPrompt({ show: false, loan: null, recipient: null, isTransfer: false, amount: 0 });
-    const success = await handleSubmit();
-    if (success && applyToLoan && prompt.loan && applyAmount > 0) {
-      await applyPaymentToLoan(target, prompt.loan, applyAmount);
+    const result = await handleSubmit();
+    if (result?.success && applyToLoan && prompt.loan && applyAmount > 0) {
+      await applyPaymentToLoan(target, prompt.loan, applyAmount, result.transactionIds);
     }
   };
   

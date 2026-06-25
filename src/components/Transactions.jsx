@@ -41,6 +41,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+// Classify a transaction into a high-level category for filtering:
+//  - 'loan'     : loan repayments / disbursements (linked loan or "loan" memo)
+//  - 'incoming' : money coming in (credits, transfers in)
+//  - 'outgoing' : money going out (debits, fees, transfers out)
+const getTransactionCategory = (tx) => {
+  const memo = (tx.memo || '').toLowerCase();
+  if (tx.loan_id || memo.includes('loan')) return 'loan';
+  if (tx.type === 'credit') return 'incoming';
+  return 'outgoing';
+};
+
 const TransactionsList = ({ transactions, customers, onVoid }) => {
       const getCustomerName = (accountNumber) => {
         const customer = customers.find(c => c.account_number === accountNumber);
@@ -152,6 +163,7 @@ const TransactionsList = ({ transactions, customers, onVoid }) => {
       const [voidingTransaction, setVoidingTransaction] = useState(null);
       const [searchTerm, setSearchTerm] = useState('');
       const [typeFilter, setTypeFilter] = useState('all');
+      const [categoryFilter, setCategoryFilter] = useState('all');
       const [statusFilter, setStatusFilter] = useState('all');
       const [amountFilter, setAmountFilter] = useState({ min: '', max: '' });
       const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
@@ -178,6 +190,7 @@ const TransactionsList = ({ transactions, customers, onVoid }) => {
             tx.id.toLowerCase().includes(searchTerm.toLowerCase());
           
           const typeMatch = typeFilter === 'all' || tx.type === typeFilter;
+          const categoryMatch = categoryFilter === 'all' || getTransactionCategory(tx) === categoryFilter;
           const statusMatch = statusFilter === 'all' || tx.status === statusFilter;
           
           const amount = parseFloat(tx.amount);
@@ -188,7 +201,7 @@ const TransactionsList = ({ transactions, customers, onVoid }) => {
           const dateMatch = (!dateFilter.start || txDate >= new Date(dateFilter.start)) &&
                            (!dateFilter.end || txDate <= new Date(dateFilter.end + 'T23:59:59'));
           
-          return searchMatch && typeMatch && statusMatch && amountMatch && dateMatch;
+          return searchMatch && typeMatch && categoryMatch && statusMatch && amountMatch && dateMatch;
         });
         
         // Sort transactions
@@ -225,7 +238,7 @@ const TransactionsList = ({ transactions, customers, onVoid }) => {
         });
         
         return filtered;
-      }, [transactions, customers, searchTerm, typeFilter, statusFilter, amountFilter, dateFilter, sortBy, sortOrder]);
+      }, [transactions, customers, searchTerm, typeFilter, categoryFilter, statusFilter, amountFilter, dateFilter, sortBy, sortOrder]);
 
       // Pagination
       const totalPages = Math.ceil(filteredAndSortedTransactions.length / itemsPerPage);
@@ -270,6 +283,7 @@ const TransactionsList = ({ transactions, customers, onVoid }) => {
       const clearFilters = () => {
         setSearchTerm('');
         setTypeFilter('all');
+        setCategoryFilter('all');
         setStatusFilter('all');
         setAmountFilter({ min: '', max: '' });
         setDateFilter({ start: '', end: '' });
@@ -445,6 +459,18 @@ const TransactionsList = ({ transactions, customers, onVoid }) => {
                     <SelectItem value="debit">Debit</SelectItem>
                     <SelectItem value="fee">Fee</SelectItem>
                     <SelectItem value="transfer">Transfer</SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="incoming">Incoming</SelectItem>
+                    <SelectItem value="outgoing">Outgoing</SelectItem>
+                    <SelectItem value="loan">Loans</SelectItem>
                   </SelectContent>
                 </Select>
                 
