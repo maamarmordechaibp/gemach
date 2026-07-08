@@ -52,7 +52,7 @@ const getTransactionCategory = (tx) => {
   return 'outgoing';
 };
 
-const TransactionsList = ({ transactions, customers, onVoid }) => {
+const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) => {
       const getCustomerName = (accountNumber) => {
         const customer = customers.find(c => c.account_number === accountNumber);
         return customer ? `${customer.first_name} ${customer.last_name}` : 'Unknown Customer';
@@ -136,6 +136,13 @@ const TransactionsList = ({ transactions, customers, onVoid }) => {
                   <td className={cn('px-6 py-4 text-right font-bold text-lg', isCredit ? 'text-green-400' : 'text-red-400')}>
                     {isCredit ? '+' : '-'}${parseFloat(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
+                  {runningBalances && (
+                    <td className="px-6 py-4 text-right font-bold text-lg text-slate-200">
+                      {runningBalances[tx.id] != null
+                        ? `$${runningBalances[tx.id].toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                        : '—'}
+                    </td>
+                  )}
                   <td className="px-6 py-4 text-center">
                     <Badge 
                       variant={tx.status === 'completed' ? 'default' : tx.status === 'bounced' ? 'destructive' : 'secondary'} 
@@ -158,7 +165,7 @@ const TransactionsList = ({ transactions, customers, onVoid }) => {
       );
     };
 
-    const Transactions = ({ transactions: initialTransactions, customers: initialCustomers }) => {
+    const Transactions = ({ transactions: initialTransactions, customers: initialCustomers, runningBalances }) => {
       const { transactions: allTransactions, customers: allCustomers, refreshData } = useData();
       const [voidingTransaction, setVoidingTransaction] = useState(null);
       const [searchTerm, setSearchTerm] = useState('');
@@ -584,12 +591,15 @@ const TransactionsList = ({ transactions, customers, onVoid }) => {
                             )}
                           </Button>
                         </th>
+                        {runningBalances && (
+                          <th className="px-6 py-4 text-right text-sm font-medium text-slate-300">Balance</th>
+                        )}
                         <th className="px-6 py-4 text-center text-sm font-medium text-slate-300">Status</th>
                         <th className="px-6 py-4 text-right text-sm font-medium text-slate-300">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700/50">
-                      <TransactionsList transactions={paginatedTransactions} customers={customers} onVoid={setVoidingTransaction} />
+                      <TransactionsList transactions={paginatedTransactions} customers={customers} onVoid={setVoidingTransaction} runningBalances={runningBalances} />
                     </tbody>
                   </table>
                 </div>

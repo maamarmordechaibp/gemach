@@ -150,6 +150,15 @@
               customer: customers.find(cust => cust.account_number === c.account_number)?.first_name + ' ' + customers.find(cust => cust.account_number === c.account_number)?.last_name
             })).filter(c => c.customer);
             if (filters.checkOutStatus) data = data.filter(c => c.status === filters.checkOutStatus);
+            if (filters.checkOutStartDate) {
+                const startDate = new Date(filters.checkOutStartDate);
+                data = data.filter(c => new Date(c.date) >= startDate);
+            }
+            if (filters.checkOutEndDate) {
+                const endDate = new Date(filters.checkOutEndDate);
+                endDate.setHours(23, 59, 59, 999);
+                data = data.filter(c => new Date(c.date) <= endDate);
+            }
             break;
           case 'fees':
             data = feeTransactions;
@@ -252,12 +261,16 @@
                 <option value="bounced">Bounced</option>
               </select>;
           case 'checks_out':
-            return <select onChange={e => setFilters({ ...filters, checkOutStatus: e.target.value })} className="w-full p-2 bg-background border border-border rounded-lg text-foreground h-10">
-                <option value="">Any Status</option>
-                <option value="pending">Pending</option>
-                <option value="printed">Printed</option>
-                <option value="deposited">Deposited</option>
-              </select>;
+            return <>
+                <select onChange={e => setFilters({ ...filters, checkOutStatus: e.target.value })} className="w-full p-2 bg-background border border-border rounded-lg text-foreground h-10">
+                  <option value="">Any Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="printed">Printed</option>
+                  <option value="deposited">Deposited</option>
+                </select>
+                <Input type="date" placeholder="Start Date" onChange={e => setFilters({ ...filters, checkOutStartDate: e.target.value })} className="bg-background" />
+                <Input type="date" placeholder="End Date" onChange={e => setFilters({ ...filters, checkOutEndDate: e.target.value })} className="bg-background" />
+              </>;
           case 'fees':
             return <>
                 <Input type="date" placeholder="Start Date" onChange={e => setFilters({ ...filters, feeStartDate: e.target.value })} className="bg-background" />

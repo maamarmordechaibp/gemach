@@ -64,8 +64,8 @@
             const payToOrderOf = checkData.pay_to_order_of && checkData.pay_to_order_of.trim() !== '' 
                 ? checkData.pay_to_order_of 
                 : '';
-            // Memo is just the account number
-            const memoText = accountNumber;
+            // Memo shows the typed note, falling back to the account number when blank
+            const memoText = (checkData.memo && checkData.memo.trim()) ? checkData.memo : accountNumber;
             const amount = parseFloat(checkData.amount || 0).toFixed(2);
             const amountInWords = numberToWords(checkData.amount || 0);
             const checkNumber = String(checkData.check_number || '0000').padStart(4, '0');

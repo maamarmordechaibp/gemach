@@ -24,7 +24,7 @@ import React from 'react';
             <AlertDialogHeader>
               <AlertDialogTitle>Insufficient Funds</AlertDialogTitle>
               <AlertDialogDescription>
-                The customer's balance is insufficient. You can offer a loan to cover the transaction.
+                The customer's balance is insufficient. You can offer a loan to cover the transaction, or allow an overdraft that lets the balance go negative without creating a loan.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-4 py-4">
@@ -37,20 +37,26 @@ import React from 'react';
                   <RadioGroupItem value="full" id="full" />
                   <Label htmlFor="full">Loan for the full debit amount of ${totalDebit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="overdraft" id="overdraft" />
+                  <Label htmlFor="overdraft">Allow overdraft — balance goes negative, no loan created</Label>
+                </div>
               </RadioGroup>
-              <div className="space-y-2">
-                <Label htmlFor="due-date">Loan Due Date</Label>
-                <Input 
-                  id="due-date" 
-                  type="date" 
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-              </div>
+              {loanOption !== 'overdraft' && (
+                <div className="space-y-2">
+                  <Label htmlFor="due-date">Loan Due Date</Label>
+                  <Input 
+                    id="due-date" 
+                    type="date" 
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
             <AlertDialogFooter>
               <AlertDialogCancel onClick={onClose}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={onConfirm} disabled={isProcessing || !dueDate}>
+              <AlertDialogAction onClick={onConfirm} disabled={isProcessing || (loanOption !== 'overdraft' && !dueDate)}>
                 {isProcessing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Processing...</> : 'Confirm & Process'}
               </AlertDialogAction>
             </AlertDialogFooter>

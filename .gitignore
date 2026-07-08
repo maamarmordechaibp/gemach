@@ -31,6 +31,8 @@ dist-ssr
 # Supabase local/temp files and credentials
 supabase/.temp/
 supabase/.branches/
+supabase/.db_url
+supabase/db_url
 .supabase/
 
 # Local data backups (may contain sensitive financial data)

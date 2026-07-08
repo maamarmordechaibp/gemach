@@ -94,7 +94,7 @@
                         <div className="memo-signature-area">
                             <div className="memo-line">
                                 <span className="label">Memo</span>
-                                <span className="value memo-value">{check.memo}</span>
+                                <span className="value memo-value">{check.memo && check.memo.trim() ? check.memo : check.account_number}</span>
                             </div>
                             <div className="signature-line">
                                 <span className="signature-placeholder"></span>
@@ -104,7 +104,7 @@
                     </div>
 
                     <div className="micr-line">
-                        <MICR text={`C${check.check_number}C`} />
+                        <MICR text={`D${check.check_number}D`} />
                         <MICR text={`A${config.routing_number || ''}A`} />
                         <MICR text={`D${check.account_number}D`} />
                     </div>

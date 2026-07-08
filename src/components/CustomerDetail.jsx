@@ -17,6 +17,20 @@
     import { Label } from '@/components/ui/label';
     import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
+    // Signed effect a single transaction has on a customer's balance.
+    // Mirrors the balance rules used by the backend so the running total
+    // reconciles to the customer's current stored balance.
+    const signedEffect = (tx) => {
+        if (tx.status === 'voided') return 0;
+        const amt = parseFloat(tx.amount) || 0;
+        if (tx.type === 'credit' && tx.status !== 'bounced') return amt;
+        if (tx.type === 'transfer') {
+            const memo = (tx.memo || '').toLowerCase();
+            return memo.includes('from') ? amt : -amt;
+        }
+        return -amt;
+    };
+
     const CustomerDetail = () => {
         const { id } = useParams();
         const { customers, transactions, settings, loading } = useData();
@@ -30,6 +44,28 @@
             if (!customer) return [];
             return customers.filter(c => c.parent_account_id === customer.account_number);
         }, [customers, customer]);
+
+        // Running "balance as of that date" for every transaction on this account
+        // (including sub-accounts). Computed over the FULL history in chronological
+        // order so it stays correct even when the on-screen list is filtered.
+        // The opening balance absorbs any starting balance carried over from before
+        // the first recorded transaction (e.g. preview-mode / pre-launch activity).
+        const { balanceMap, openingBalance } = useMemo(() => {
+            if (!transactions || !customer) return { balanceMap: {}, openingBalance: 0 };
+            const allAccountNumbers = [customer.account_number, ...subAccounts.map(sa => sa.account_number)];
+            const all = transactions
+                .filter(t => allAccountNumbers.includes(t.account_number))
+                .slice()
+                .sort((a, b) => new Date(a.date) - new Date(b.date) || String(a.id).localeCompare(String(b.id)));
+            const anchor = (parseFloat(customer.balance) || 0)
+                + subAccounts.reduce((s, sa) => s + (parseFloat(sa.balance) || 0), 0);
+            const totalEffect = all.reduce((s, t) => s + signedEffect(t), 0);
+            const opening = anchor - totalEffect;
+            let running = opening;
+            const map = {};
+            for (const t of all) { running += signedEffect(t); map[t.id] = running; }
+            return { balanceMap: map, openingBalance: opening };
+        }, [transactions, customer, subAccounts]);
         
         const handlePrint = () => {
             if (!customer) return;
@@ -48,6 +84,7 @@
                     <td style="padding: 8px; text-transform: capitalize;">${tx.type}</td>
                     <td style="padding: 8px;">${tx.memo || tx.reason || ''} ${tx.status === 'voided' ? '(VOIDED)' : ''}</td>
                     <td style="padding: 8px; text-align: right; font-family: monospace; color: ${tx.type === 'credit' ? 'green' : 'red'};">${tx.type === 'credit' ? '+' : '-'}$${parseFloat(tx.amount).toFixed(2)}</td>
+                    <td style="padding: 8px; text-align: right; font-family: monospace; font-weight: bold;">$${(balanceMap[tx.id] ?? 0).toFixed(2)}</td>
                 </tr>`).join('');
 
             const subAccountsHtml = subAccounts.length > 0 ? `<div style="font-size:11px;margin-top:8px;"><strong>Sub-Accounts:</strong><ul style="padding-left:20px;margin:4px 0;">${subAccounts.map(sa => `<li>${sa.first_name} ${sa.last_name} (${sa.account_number})</li>`).join('')}</ul></div>` : '';
@@ -84,9 +121,10 @@
 </div>
 <div>
   <h3 style="font-size:18px;font-weight:600;border-bottom:1px solid #999;padding-bottom:8px;margin-bottom:16px;">Transaction History</h3>
+  <p style="font-size:13px;color:#555;margin-bottom:12px;">Opening balance (before listed activity): <strong>$${openingBalance.toFixed(2)}</strong></p>
   ${filteredAndSortedTransactions.length === 0 ? '<p style="text-align:center;padding:24px;color:#888;">No transactions to display.</p>' : `
   <table style="width:100%;border-collapse:collapse;font-size:13px;">
-    <thead><tr style="border-bottom:2px solid #000;"><th style="padding:8px;text-align:left;">Date</th><th style="padding:8px;text-align:left;">Type</th><th style="padding:8px;text-align:left;">Memo</th><th style="padding:8px;text-align:right;">Amount</th></tr></thead>
+    <thead><tr style="border-bottom:2px solid #000;"><th style="padding:8px;text-align:left;">Date</th><th style="padding:8px;text-align:left;">Type</th><th style="padding:8px;text-align:left;">Memo</th><th style="padding:8px;text-align:right;">Amount</th><th style="padding:8px;text-align:right;">Balance</th></tr></thead>
     <tbody>${txRows}</tbody>
   </table>`}
 </div>
@@ -257,7 +295,7 @@
                         </div>
                     </CardHeader>
                     <CardContent className="p-6">
-                        <Transactions transactions={filteredAndSortedTransactions} customers={customers} />
+                        <Transactions transactions={filteredAndSortedTransactions} customers={customers} runningBalances={balanceMap} />
                     </CardContent>
                 </Card>
                 

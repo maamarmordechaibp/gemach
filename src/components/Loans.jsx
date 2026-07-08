@@ -1,19 +1,112 @@
 import React, { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { Coins, AlertTriangle, Plus, Download } from 'lucide-react';
+import { Coins, AlertTriangle, Plus, Download, History, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import AddLoanModal from '@/components/AddLoanModal';
 import PayLoanModal from '@/components/PayLoanModal';
 import AdminPasswordDialog from './AdminPasswordDialog';
 
+const fmtMoney = (n) => parseFloat(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Modal showing the full payment history for a single loan: the original
+// disbursement plus every repayment recorded against it (transactions whose
+// loan_id matches this loan).
+const LoanHistoryModal = ({ loan, onClose }) => {
+  const { transactions } = useData();
+
+  const loanTransactions = useMemo(() => {
+    if (!loan) return [];
+    return (transactions || [])
+      .filter(t => t.loan_id === loan.id)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [transactions, loan]);
+
+  const totalPaid = useMemo(
+    () => loanTransactions
+      .filter(t => t.type === 'credit' && t.status !== 'voided')
+      .reduce((s, t) => s + parseFloat(t.amount || 0), 0),
+    [loanTransactions]
+  );
+
+  if (!loan) return null;
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          className="relative bg-card border border-border rounded-xl w-full max-w-2xl mx-4 flex flex-col max-h-[85vh]"
+        >
+          <div className="flex items-center justify-between p-6 border-b border-border">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-gradient-to-r from-blue-500 to-teal-500 rounded-lg"><History className="h-5 w-5 text-white" /></div>
+              <div>
+                <h2 className="text-xl font-bold text-foreground">Loan Payment History</h2>
+                <p className="text-sm text-muted-foreground">
+                  {loan.customer?.first_name} {loan.customer?.last_name} · {loan.customer?.account_number}
+                </p>
+              </div>
+            </div>
+            <Button variant="ghost" size="icon" onClick={onClose}><X className="h-5 w-5" /></Button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 p-6 border-b border-border text-center">
+            <div>
+              <p className="text-xs text-muted-foreground">Remaining</p>
+              <p className="text-lg font-bold text-foreground">${fmtMoney(loan.amount)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Paid</p>
+              <p className="text-lg font-bold text-green-400">${fmtMoney(totalPaid)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Due Date</p>
+              <p className="text-lg font-bold text-foreground">{new Date(loan.due_date).toLocaleDateString()}</p>
+            </div>
+          </div>
+
+          <div className="overflow-y-auto p-6">
+            {loanTransactions.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No payments have been recorded against this loan yet.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-muted-foreground border-b border-border">
+                    <th className="py-2">Date</th>
+                    <th className="py-2">Description</th>
+                    <th className="py-2 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {loanTransactions.map(t => (
+                    <tr key={t.id} className={cn(t.status === 'voided' && 'opacity-50 line-through')}>
+                      <td className="py-2 text-foreground">{new Date(t.date).toLocaleDateString()}</td>
+                      <td className="py-2 text-muted-foreground">{t.memo || 'Payment'}{t.status === 'voided' ? ' (VOIDED)' : ''}</td>
+                      <td className="py-2 text-right font-medium text-green-400">${fmtMoney(t.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    </AnimatePresence>
+  );
+};
+
 const Loans = () => {
   const { loans, customers, loading } = useData();
   const { isAdmin } = useAuth();
   const [isLoanModalOpen, setIsLoanModalOpen] = useState(false);
   const [payingLoan, setPayingLoan] = useState(null);
+  const [historyLoan, setHistoryLoan] = useState(null);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
 
   const loansWithCustomerData = useMemo(() => {
@@ -122,11 +215,17 @@ const Loans = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {loan.status !== 'paid' && (
-                        <Button variant="outline" size="sm" onClick={() => setPayingLoan(loan)}>
-                          Pay Off
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => setHistoryLoan(loan)} title="View payment history">
+                          <History className="h-4 w-4 mr-1" />
+                          History
                         </Button>
-                      )}
+                        {loan.status !== 'paid' && (
+                          <Button variant="outline" size="sm" onClick={() => setPayingLoan(loan)}>
+                            Pay Off
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </motion.tr>
                 )
@@ -144,6 +243,7 @@ const Loans = () => {
       </motion.div>
       <AddLoanModal isOpen={isLoanModalOpen} onClose={() => setIsLoanModalOpen(false)} />
       {payingLoan && <PayLoanModal isOpen={!!payingLoan} onClose={() => setPayingLoan(null)} loan={payingLoan} />}
+      {historyLoan && <LoanHistoryModal loan={historyLoan} onClose={() => setHistoryLoan(null)} />}
       <AdminPasswordDialog isOpen={isPasswordDialogOpen} onClose={() => setIsPasswordDialogOpen(false)} onConfirm={() => setIsLoanModalOpen(true)} />
     </div>
   );

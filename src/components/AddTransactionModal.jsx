@@ -212,6 +212,14 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
   };
 
   const handleLoanPromptConfirm = async () => {
+    // Overdraft: process the debit as-is and let the balance go negative,
+    // without creating a loan.
+    if (loanPrompt.loanOption === 'overdraft') {
+      await handleSubmit();
+      setLoanPrompt({ show: false, shortfall: 0, dueDate: '', loanOption: 'shortfall' });
+      return;
+    }
+
     if (!loanPrompt.dueDate) { toast({ title: "Due Date Required", variant: "destructive" }); return; }
     
     const loanAmount = loanPrompt.loanOption === 'full' ? totalDebit : loanPrompt.shortfall;
