@@ -94,7 +94,7 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
   const [customerInitialData, setCustomerInitialData] = useState({});
   
   const [loanPrompt, setLoanPrompt] = useState({ show: false, shortfall: 0, dueDate: '', loanOption: 'shortfall' });
-  const [repaymentPrompt, setRepaymentPrompt] = useState({ show: false, loan: null, recipient: null, isTransfer: false, amount: 0 });
+  const [repaymentPrompt, setRepaymentPrompt] = useState({ show: false, loans: [], recipient: null, isTransfer: false, amount: 0 });
   const [passwordDialog, setPasswordDialog] = useState({ show: false, onConfirm: null });
 
   const customerLoans = useMemo(() => {
@@ -147,13 +147,13 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
     }
 
     if (totalCredit > 0 && customerLoans.length > 0) {
-      setRepaymentPrompt({ show: true, loan: customerLoans[0], recipient: null, isTransfer: false, amount: totalCredit });
+      setRepaymentPrompt({ show: true, loans: customerLoans, recipient: null, isTransfer: false, amount: totalCredit });
       return;
     }
 
     const transferAmount = parseFloat(transactionState.transferDetails?.amount) || 0;
     if (transferAmount > 0 && recipientCustomer && recipientLoans.length > 0) {
-      setRepaymentPrompt({ show: true, loan: recipientLoans[0], recipient: recipientCustomer, isTransfer: true, amount: transferAmount });
+      setRepaymentPrompt({ show: true, loans: recipientLoans, recipient: recipientCustomer, isTransfer: true, amount: transferAmount });
       return;
     }
 
@@ -180,28 +180,35 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
     setLoanPrompt({ show: false, shortfall: 0, dueDate: '', loanOption: 'shortfall' });
   };
 
-  const applyPaymentToLoan = async (payer, loan, paymentAmount, depositTxIds = []) => {
+  const applyPaymentToLoans = async (payer, allocations, depositTxIds = []) => {
     try {
-      const payment = Math.min(paymentAmount, parseFloat(loan.amount));
-      const remaining = parseFloat(loan.amount) - payment;
-      const newStatus = remaining <= 0.001 ? 'paid' : 'active';
-      const { error } = await supabase
-        .from('loans')
-        .update({ amount: Math.max(0, remaining), status: newStatus })
-        .eq('id', loan.id);
-      if (error) throw error;
+      const active = (allocations || []).filter(a => a.alloc > 0.001);
+      if (active.length === 0) return;
+      const totalPayment = active.reduce((s, a) => s + Math.min(a.alloc, parseFloat(a.loan.amount)), 0);
 
-      // The credit was already added to the balance by process_transaction_v2.
-      // Since this portion is being applied to the loan (not kept as savings),
-      // deduct it back out so the balance nets to zero for the applied amount.
-      if (payer && payment > 0) {
+      // 1. Reduce each loan record by its allocated amount.
+      for (const { loan, alloc } of active) {
+        const payment = Math.min(alloc, parseFloat(loan.amount));
+        const remaining = parseFloat(loan.amount) - payment;
+        const newStatus = remaining <= 0.001 ? 'paid' : 'active';
+        const { error } = await supabase
+          .from('loans')
+          .update({ amount: Math.max(0, remaining), status: newStatus })
+          .eq('id', loan.id);
+        if (error) throw error;
+      }
+
+      // 2. The credit was already added to the balance by process_transaction_v2.
+      // Since this portion is applied to loans (not kept as savings), deduct it
+      // back out so the balance nets to zero for the applied amount.
+      if (payer && totalPayment > 0) {
         const { data: fresh, error: fetchError } = await supabase
           .from('customers')
           .select('balance')
           .eq('id', payer.id)
           .single();
         if (fetchError) throw fetchError;
-        const newBalance = (parseFloat(fresh?.balance) || 0) - payment;
+        const newBalance = (parseFloat(fresh?.balance) || 0) - totalPayment;
         const { error: balError } = await supabase
           .from('customers')
           .update({ balance: newBalance })
@@ -209,11 +216,10 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
         if (balError) throw balError;
       }
 
-      // Split the original cash deposit into two clearly-labelled rows so the
-      // transaction log shows exactly how the money was divided: the part that
-      // went to the loan and the part (if any) that stayed in the account.
+      // 3. Split the original cash deposit into a repayment row per loan plus any
+      // leftover that stayed in the account, so the log shows the full breakdown.
       const cashTxId = (depositTxIds || []).find(id => id.startsWith('CREDIT-CASH-'));
-      if (cashTxId && payment > 0) {
+      if (cashTxId && totalPayment > 0) {
         const { data: dep, error: depErr } = await supabase
           .from('transactions')
           .select('*')
@@ -222,39 +228,38 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
         if (depErr) throw depErr;
 
         const depositTotal = parseFloat(dep.amount);
-        const accountPortion = Math.max(0, depositTotal - payment);
-        const splitNote = accountPortion > 0.001 ? ` (part of $${depositTotal.toFixed(2)} deposit)` : '';
+        const accountPortion = Math.max(0, depositTotal - totalPayment);
+        const splitNote = accountPortion > 0.001 ? ` (part of $${formatCurrency(depositTotal)} deposit)` : '';
 
-        // Loan-repayment row for the part applied to the loan.
-        const repayRow = {
-          id: `REPAY-${Date.now()}-${loan.id.slice(0, 8)}`,
+        const repayRows = active.map((a, i) => ({
+          id: `REPAY-${Date.now()}-${i}-${a.loan.id.slice(0, 8)}`,
           account_number: payer.account_number,
           type: 'credit',
-          amount: payment,
+          amount: Math.min(a.alloc, parseFloat(a.loan.amount)),
           date: dep.date,
           status: 'completed',
-          loan_id: loan.id,
+          loan_id: a.loan.id,
           memo: `Loan Repayment${splitNote}`,
-        };
-        const { error: repayErr } = await supabase.from('transactions').insert([repayRow]);
+        }));
+        const { error: repayErr } = await supabase.from('transactions').insert(repayRows);
         if (repayErr) throw repayErr;
 
         if (accountPortion > 0.001) {
           // Part stayed in the account — relabel the original deposit row.
           const { error: updErr } = await supabase
             .from('transactions')
-            .update({ amount: accountPortion, memo: `Deposit to balance (part of $${depositTotal.toFixed(2)} deposit)` })
+            .update({ amount: accountPortion, memo: `Deposit to balance (part of $${formatCurrency(depositTotal)} deposit)` })
             .eq('id', cashTxId);
           if (updErr) throw updErr;
         } else {
-          // Whole deposit went to the loan — remove the now-redundant deposit row.
+          // Whole deposit went to the loans — remove the now-redundant deposit row.
           const { error: delErr } = await supabase.from('transactions').delete().eq('id', cashTxId);
           if (delErr) throw delErr;
         }
       }
 
       const payerName = payer ? `${payer.first_name} ${payer.last_name}'s` : 'the';
-      toast({ title: "Loan Updated", description: `Applied $${payment.toFixed(2)} toward ${payerName} loan.` });
+      toast({ title: "Loan Updated", description: `Applied $${formatCurrency(totalPayment)} toward ${payerName} loan${active.length > 1 ? 's' : ''}.` });
       refreshData();
     } catch (error) {
       toast({ title: "Loan Repayment Failed", description: error.message, variant: "destructive" });
@@ -264,14 +269,25 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
   const handleRepaymentConfirm = async (applyToLoan, applyAmount = 0) => {
     const prompt = repaymentPrompt;
     // The credit/transfer is added to the balance by process_transaction_v2.
-    // When applying to a loan we additionally reduce the loan record by the
-    // amount the user chose (capped to the loan balance), so partial payments
-    // only reduce the loan by that amount instead of paying it off entirely.
+    // When applying to loans we additionally reduce the loan records by the
+    // amount the user chose (allocated oldest-first), so partial payments only
+    // reduce the loans by that amount instead of paying them all off.
     const target = prompt.recipient || selectedCustomer;
-    setRepaymentPrompt({ show: false, loan: null, recipient: null, isTransfer: false, amount: 0 });
+    const promptLoans = prompt.loans || [];
+    setRepaymentPrompt({ show: false, loans: [], recipient: null, isTransfer: false, amount: 0 });
     const result = await handleSubmit();
-    if (result?.success && applyToLoan && prompt.loan && applyAmount > 0) {
-      await applyPaymentToLoan(target, prompt.loan, applyAmount, result.transactionIds);
+    if (result?.success && applyToLoan && promptLoans.length && applyAmount > 0) {
+      const sorted = promptLoans
+        .filter(l => parseFloat(l.amount) > 0 && l.status !== 'paid')
+        .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+      let remaining = applyAmount;
+      const allocations = sorted.map(l => {
+        const amt = parseFloat(l.amount);
+        const alloc = Math.min(remaining, amt);
+        remaining = Math.max(0, remaining - alloc);
+        return { loan: l, alloc };
+      }).filter(a => a.alloc > 0.001);
+      await applyPaymentToLoans(target, allocations, result.transactionIds);
     }
   };
   
@@ -356,7 +372,7 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
       <CustomerModal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSave={() => {}} initialData={customerInitialData} />
       <DonationModal isOpen={isDonationModalOpen} onClose={() => setIsDonationModalOpen(false)} customer={selectedCustomer} onDonationSuccess={refreshData} />
       <LoanChoiceDialog isOpen={loanPrompt.show} onClose={() => setLoanPrompt({ ...loanPrompt, show: false })} onConfirm={handleLoanPromptConfirm} totalDebit={totalDebit} shortfall={loanPrompt.shortfall} dueDate={loanPrompt.dueDate} setDueDate={(d) => setLoanPrompt({...loanPrompt, dueDate: d})} loanOption={loanPrompt.loanOption} setLoanOption={(o) => setLoanPrompt({...loanPrompt, loanOption: o})} isProcessing={isProcessing} />
-      <RepaymentDialog isOpen={repaymentPrompt.show} onClose={() => setRepaymentPrompt({ show: false, loan: null, recipient: null, isTransfer: false, amount: 0 })} onConfirm={handleRepaymentConfirm} loan={repaymentPrompt.loan} totalCredit={repaymentPrompt.amount || totalCredit} />
+      <RepaymentDialog isOpen={repaymentPrompt.show} onClose={() => setRepaymentPrompt({ show: false, loans: [], recipient: null, isTransfer: false, amount: 0 })} onConfirm={handleRepaymentConfirm} loans={repaymentPrompt.loans} totalCredit={repaymentPrompt.amount || totalCredit} />
       <AdminPasswordDialog isOpen={passwordDialog.show} onClose={() => setPasswordDialog({ show: false, onConfirm: null })} onConfirm={passwordDialog.onConfirm} />
     </div>
   );

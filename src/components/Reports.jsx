@@ -9,7 +9,7 @@
     import { supabase } from '@/lib/customSupabaseClient';
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
     import { saveAs } from 'file-saver';
-    import { cn } from '@/lib/utils';
+    import { cn, isLoanOverdue } from '@/lib/utils';
 
     const Reports = () => {
       const {
@@ -134,7 +134,17 @@
               ...l,
               customer: customers.find(c => c.id === l.customer_id)?.first_name + ' ' + customers.find(c => c.id === l.customer_id)?.last_name
             })).filter(l => l.customer);
-            if (filters.loanStatus) data = data.filter(l => l.status === filters.loanStatus);
+            if (filters.loanStatus) {
+              if (filters.loanStatus === 'overdue') {
+                // Overdue is derived from the due date, not the stored status.
+                data = data.filter(l => isLoanOverdue(l));
+              } else if (filters.loanStatus === 'active') {
+                // "Active" here means outstanding but not yet past due.
+                data = data.filter(l => l.status === 'active' && !isLoanOverdue(l));
+              } else {
+                data = data.filter(l => l.status === filters.loanStatus);
+              }
+            }
             if (filters.minLoanAmount) data = data.filter(l => parseFloat(l.amount) >= parseFloat(filters.minLoanAmount));
             break;
           case 'checks_in':

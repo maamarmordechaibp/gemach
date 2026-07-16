@@ -2,9 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { Coins, AlertTriangle, Plus, Download, History, X } from 'lucide-react';
+import { Coins, AlertTriangle, Plus, Download, History, X, ChevronDown, ChevronRight, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, isLoanOverdue } from '@/lib/utils';
 import AddLoanModal from '@/components/AddLoanModal';
 import PayLoanModal from '@/components/PayLoanModal';
 import AdminPasswordDialog from './AdminPasswordDialog';
@@ -108,6 +108,15 @@ const Loans = () => {
   const [payingLoan, setPayingLoan] = useState(null);
   const [historyLoan, setHistoryLoan] = useState(null);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [expanded, setExpanded] = useState(() => new Set());
+
+  const toggleExpand = (customerId) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(customerId)) next.delete(customerId); else next.add(customerId);
+      return next;
+    });
+  };
 
   const loansWithCustomerData = useMemo(() => {
     return loans.map(loan => {
@@ -115,6 +124,27 @@ const Loans = () => {
       return { ...loan, customer };
     }).filter(loan => loan.customer);
   }, [loans, customers]);
+
+  // Group loans by customer so a customer with several loans is shown once,
+  // with an indicator, and their individual loans can be expanded on demand.
+  const groupedLoans = useMemo(() => {
+    const map = new Map();
+    loansWithCustomerData.forEach(loan => {
+      const key = loan.customer.id;
+      if (!map.has(key)) map.set(key, { customer: loan.customer, loans: [] });
+      map.get(key).loans.push(loan);
+    });
+    return Array.from(map.values()).map(g => ({
+      ...g,
+      totalAmount: g.loans.reduce((s, l) => s + parseFloat(l.amount || 0), 0),
+      hasOverdue: g.loans.some(l => isLoanOverdue(l)),
+      earliestDue: g.loans.reduce((min, l) => {
+        if (!l.due_date) return min;
+        const d = new Date(l.due_date);
+        return (!min || d < min) ? d : min;
+      }, null),
+    }));
+  }, [loansWithCustomerData]);
 
   const handleAddLoanClick = () => {
     if (isAdmin) {
@@ -195,40 +225,102 @@ const Loans = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {loansWithCustomerData.length > 0 ? loansWithCustomerData.map(loan => {
-                const config = statusConfig[loan.status] || statusConfig.active;
-                return (
-                  <motion.tr 
-                    key={loan.id} 
-                    className={cn('transition-colors', (loan.status === 'active' || loan.status === 'overdue') && 'hover:bg-accent')}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <td className="px-6 py-4 text-foreground font-medium">{loan.customer.first_name} {loan.customer.last_name}</td>
-                    <td className="px-6 py-4 text-foreground font-bold">${parseFloat(loan.amount).toLocaleString()}</td>
-                    <td className="px-6 py-4 text-muted-foreground">{new Date(loan.due_date).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 text-center">
-                      <div className={cn("flex items-center justify-center space-x-2 p-1 rounded-full", config.bg)}>
-                        {loan.status === 'overdue' && <AlertTriangle className={`h-4 w-4 ${config.color}`} />}
-                        <span className={`capitalize font-medium ${config.color}`}>{loan.status}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => setHistoryLoan(loan)} title="View payment history">
-                          <History className="h-4 w-4 mr-1" />
-                          History
-                        </Button>
-                        {loan.status !== 'paid' && (
-                          <Button variant="outline" size="sm" onClick={() => setPayingLoan(loan)}>
-                            Pay Off
+              {groupedLoans.length > 0 ? groupedLoans.map(group => {
+                const isMulti = group.loans.length > 1;
+                const isExpanded = expanded.has(group.customer.id);
+
+                // Single-loan customer: show the loan directly (no clutter).
+                if (!isMulti) {
+                  const loan = group.loans[0];
+                  const status = isLoanOverdue(loan) ? 'overdue' : loan.status;
+                  const config = statusConfig[status] || statusConfig.active;
+                  return (
+                    <tr key={loan.id} className={cn('transition-colors', status !== 'paid' && 'hover:bg-accent')}>
+                      <td className="px-6 py-4 text-foreground font-medium">{group.customer.first_name} {group.customer.last_name}</td>
+                      <td className="px-6 py-4 text-foreground font-bold">${parseFloat(loan.amount).toLocaleString()}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{loan.due_date ? new Date(loan.due_date).toLocaleDateString() : '—'}</td>
+                      <td className="px-6 py-4 text-center">
+                        <div className={cn("inline-flex items-center justify-center space-x-2 px-3 py-1 rounded-full", config.bg)}>
+                          {status === 'overdue' && <AlertTriangle className={`h-4 w-4 ${config.color}`} />}
+                          <span className={`capitalize font-medium ${config.color}`}>{status}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => setHistoryLoan(loan)} title="View payment history">
+                            <History className="h-4 w-4 mr-1" />
+                            History
                           </Button>
-                        )}
-                      </div>
-                    </td>
-                  </motion.tr>
-                )
+                          {loan.status !== 'paid' && (
+                            <Button variant="outline" size="sm" onClick={() => setPayingLoan(loan)}>
+                              Pay Off
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+
+                // Multi-loan customer: one collapsed header row + expandable loan rows.
+                const groupStatus = group.hasOverdue
+                  ? 'overdue'
+                  : (group.loans.every(l => l.status === 'paid') ? 'paid' : 'active');
+                const groupConfig = statusConfig[groupStatus] || statusConfig.active;
+
+                return (
+                  <React.Fragment key={group.customer.id}>
+                    <tr className="transition-colors hover:bg-accent cursor-pointer bg-secondary/20" onClick={() => toggleExpand(group.customer.id)}>
+                      <td className="px-6 py-4 text-foreground font-medium">
+                        <div className="flex items-center gap-2">
+                          {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                          <Layers className="h-4 w-4 text-primary" />
+                          <span>{group.customer.first_name} {group.customer.last_name}</span>
+                          <span className="ml-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary">{group.loans.length} loans</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-foreground font-bold">${group.totalAmount.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{group.earliestDue ? new Date(group.earliestDue).toLocaleDateString() : '—'}</td>
+                      <td className="px-6 py-4 text-center">
+                        <div className={cn("inline-flex items-center justify-center space-x-2 px-3 py-1 rounded-full", groupConfig.bg)}>
+                          {group.hasOverdue && <AlertTriangle className={`h-4 w-4 ${groupConfig.color}`} />}
+                          <span className={`capitalize font-medium ${groupConfig.color}`}>{groupStatus}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right text-xs text-muted-foreground">{isExpanded ? 'Hide' : 'View'} loans</td>
+                    </tr>
+                    {isExpanded && group.loans.map(loan => {
+                      const status = isLoanOverdue(loan) ? 'overdue' : loan.status;
+                      const config = statusConfig[status] || statusConfig.active;
+                      return (
+                        <tr key={loan.id} className="bg-background/40">
+                          <td className="px-6 py-3 pl-16 text-sm text-muted-foreground">Loan</td>
+                          <td className="px-6 py-3 text-foreground font-semibold">${parseFloat(loan.amount).toLocaleString()}</td>
+                          <td className="px-6 py-3 text-muted-foreground">{loan.due_date ? new Date(loan.due_date).toLocaleDateString() : '—'}</td>
+                          <td className="px-6 py-3 text-center">
+                            <div className={cn("inline-flex items-center justify-center space-x-2 px-3 py-1 rounded-full", config.bg)}>
+                              {status === 'overdue' && <AlertTriangle className={`h-4 w-4 ${config.color}`} />}
+                              <span className={`capitalize font-medium ${config.color}`}>{status}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button variant="ghost" size="sm" onClick={() => setHistoryLoan(loan)} title="View payment history">
+                                <History className="h-4 w-4 mr-1" />
+                                History
+                              </Button>
+                              {loan.status !== 'paid' && (
+                                <Button variant="outline" size="sm" onClick={() => setPayingLoan(loan)}>
+                                  Pay Off
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
               }) : (
                 <tr>
                   <td colSpan="5" className="text-center py-12 text-muted-foreground">

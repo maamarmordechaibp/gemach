@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useData } from '@/contexts/DataContext';
 import { DollarSign, TrendingUp, AlertTriangle, CalendarClock } from 'lucide-react';
+import { isLoanOverdue } from '@/lib/utils';
 
 const StatCard = ({ icon, title, value, color }) => (
   <motion.div
@@ -33,7 +34,7 @@ const LoansDashboard = () => {
     const activeLoans = loans.filter(l => l.status === 'active' || l.status === 'overdue');
 
     const totalOut = activeLoans.reduce((sum, loan) => sum + parseFloat(loan.amount), 0);
-    const overdueCount = loans.filter(l => l.status === 'overdue').length;
+    const overdueCount = loans.filter(l => isLoanOverdue(l)).length;
     const dueNextWeek = activeLoans.filter(l => {
       const dueDate = new Date(l.due_date);
       return dueDate > now && dueDate <= nextWeek;
