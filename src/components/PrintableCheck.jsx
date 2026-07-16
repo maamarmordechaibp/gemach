@@ -131,7 +131,7 @@ const PrintableCheck = React.forwardRef(({ checks }, ref) => {
 
                         {/* Memo section */}
                         <div className="absolute" style={{ top: '2.3in', left: '1in' }}>
-                            <p style={{ fontFamily: 'helvetica', fontSize: '10pt' }}>Memo: {check.memo || ''}</p>
+                            <p style={{ fontFamily: 'helvetica', fontSize: '10pt' }}>Memo: {check.account_number || ''}{check.memo ? ` - ${check.memo}` : ''}</p>
                         </div>
 
                         {/* Signature line */}
@@ -141,7 +141,7 @@ const PrintableCheck = React.forwardRef(({ checks }, ref) => {
 
                         {/* MICR line with correct formatting at bottom */}
                         <div className="absolute" style={{ bottom: '0.2in', left: '0.5in', right: '0.5in' }}>
-                            <MICR text={`${check.check_number} A${checkConfig.routing_number || '021300077'}A ${checkConfig.account_number || '1234567890'}C`} />
+                            <MICR fontSize="12px" text={`${check.check_number} A${checkConfig.routing_number || '021300077'}A ${checkConfig.account_number || '1234567890'}C`} />
                         </div>
                     </div>
                 ))}

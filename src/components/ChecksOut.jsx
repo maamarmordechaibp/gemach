@@ -248,16 +248,16 @@ const ChecksOut = () => {
         const config = settings?.check_config || {};
         const accountName = config.name || 'ACCOUNT NAME';
         const payToOrderOf = (checkData.pay_to_order_of || '').trim();
-        const memoText = checkData.account_number || '';
+        const memoText = `${checkData.account_number || ''}${checkData.memo ? ` - ${checkData.memo}` : ''}`;
         const amount = parseFloat(checkData.amount || 0).toFixed(2);
         const amountInWords = numberToWords(checkData.amount || 0);
         const checkNumber = String(checkData.check_number || '0000').padStart(4, '0');
         const date = new Date(checkData.date).toLocaleDateString();
         const micrRouting = config.routing_number || '123456789';
         const micrAccount = config.account_number || '1122334455';
-        // Use proper MICR Unicode symbols so they look correct even without the MICR font
-        // ⑆ = transit (around routing), ⑈ = on-us (around check# and account)
-        const micrLine = `\u2446${checkNumber}\u2446  \u2446${micrRouting}\u2446  ${micrAccount}\u2448`;
+        // MICR line: check number (no wrapping symbols), routing wrapped in transit
+        // symbols (⑆), and account followed by the on-us symbol (⑈).
+        const micrLine = `${checkNumber}  \u2446${micrRouting}\u2446  ${micrAccount}\u2448`;
 
         return `
             <div class="check-container">
@@ -371,16 +371,16 @@ body { background: white; margin: 0; padding: 0; font-family: 'Roboto', Arial, s
 .bank-address { font-size: 8pt; margin-top: 2px; color: #333; font-weight: 400; }
 
 /* Memo + signature */
-.memo-signature { position: absolute; top: 2.3in; left: 0.5in; right: 0.5in; display: grid; grid-template-columns: 2.5in 1fr; gap: 0.4in; }
+.memo-signature { position: absolute; top: 2.3in; left: 0.5in; right: 0.5in; display: grid; grid-template-columns: 3.5in 1fr; gap: 0.4in; }
 .memo { display: flex; align-items: baseline; font-size: 9pt; }
 .memo-label { font-weight: 600; color: #000; margin-right: 8px; }
-.memo-input { flex: 1; border-bottom: 1px solid #555; font-size: 9pt; padding: 0 4px 2px 4px; color: #000; max-width: 2in; min-height: 12pt; }
+.memo-input { flex: 1; border-bottom: 1px solid #555; font-size: 9pt; padding: 0 4px 2px 4px; color: #000; max-width: 3in; min-height: 12pt; }
 .signature { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; }
 .signature-line { border-bottom: 1px solid #333; width: 100%; max-width: 2.8in; height: 0.26in; margin-bottom: 2px; }
 .signature-label { font-size: 7.5pt; color: #555; text-align: right; width: 100%; max-width: 2.8in; }
 
 /* MICR line - bottom of check */
-.micr-line { position: absolute; bottom: 0.2in; left: 0.6in; right: 0.5in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', 'Courier New', monospace; font-size: 13pt; letter-spacing: 2px; color: #000; line-height: 1; font-weight: 500; }
+.micr-line { position: absolute; bottom: 0.2in; left: 0.6in; right: 0.5in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', 'Courier New', monospace; font-size: 10pt; letter-spacing: 2px; color: #000; line-height: 1; font-weight: 500; }
 
 @media print {
   html, body { background: white; margin: 0; padding: 0; }

@@ -11,10 +11,10 @@ export const MICRProvider = ({ children }) => {
   );
 };
 
-export const MICR = ({ text }) => {
+export const MICR = ({ text, fontSize = '16px' }) => {
   const micrStyle = {
     fontFamily: '"E-13B", "Courier New", Courier, monospace',
-    fontSize: '16px',
+    fontSize,
     fontWeight: 'normal',
     letterSpacing: '1px',
     lineHeight: '1.2'
