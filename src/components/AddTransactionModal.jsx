@@ -298,6 +298,25 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
         }
       }
 
+      // Non-cash source (e.g. a transfer into an account that has loans): there
+      // is no cash deposit row to split, so record the loan repayment explicitly
+      // so it shows in the payer's history and the loan's "Total Paid", exactly
+      // like a regular transaction's loan payment.
+      if (!cashTxId && totalPayment > 0 && payer) {
+        const transferRepayRows = active.map((a, i) => ({
+          id: `REPAY-${Date.now()}-${i}-${a.loan.id.slice(0, 8)}`,
+          account_number: payer.account_number,
+          type: 'credit',
+          amount: Math.min(a.alloc, parseFloat(a.loan.amount)),
+          date: new Date().toISOString(),
+          status: 'completed',
+          loan_id: a.loan.id,
+          memo: 'Loan Repayment (applied from transfer)',
+        }));
+        const { error: transferRepayErr } = await supabase.from('transactions').insert(transferRepayRows);
+        if (transferRepayErr) throw transferRepayErr;
+      }
+
       const payerName = payer ? `${payer.first_name} ${payer.last_name}'s` : 'the';
       toast({ title: "Loan Updated", description: `Applied $${formatCurrency(totalPayment)} toward ${payerName} loan${active.length > 1 ? 's' : ''}.` });
       refreshData();
