@@ -36,7 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -188,7 +188,7 @@ const TransactionSummary = ({ transactions }) => {
           <TrendingUp className="h-4 w-4 text-green-400" />
           <div>
             <p className="text-sm text-muted-foreground">Credits</p>
-            <p className="text-lg font-bold text-green-400">${summary.totalCredits.toFixed(2)}</p>
+            <p className="text-lg font-bold text-green-400">${formatCurrency(summary.totalCredits)}</p>
           </div>
         </div>
       </Card>
@@ -198,7 +198,7 @@ const TransactionSummary = ({ transactions }) => {
           <TrendingDown className="h-4 w-4 text-red-400" />
           <div>
             <p className="text-sm text-muted-foreground">Debits</p>
-            <p className="text-lg font-bold text-red-400">${summary.totalDebits.toFixed(2)}</p>
+            <p className="text-lg font-bold text-red-400">${formatCurrency(summary.totalDebits)}</p>
           </div>
         </div>
       </Card>
@@ -208,7 +208,7 @@ const TransactionSummary = ({ transactions }) => {
           <DollarSign className="h-4 w-4 text-yellow-400" />
           <div>
             <p className="text-sm text-muted-foreground">Fees</p>
-            <p className="text-lg font-bold text-yellow-400">${summary.totalFees.toFixed(2)}</p>
+            <p className="text-lg font-bold text-yellow-400">${formatCurrency(summary.totalFees)}</p>
           </div>
         </div>
       </Card>
@@ -359,7 +359,7 @@ const TransactionsList = ({ transactions, customers, onVoid }) => {
                     'text-red-400': !isCredit && !isFee,
                     'text-yellow-400': isFee
                   })}>
-                    {isCredit ? '+' : '-'}${parseFloat(tx.amount).toFixed(2)}
+                    {isCredit ? '+' : '-'}${formatCurrency(tx.amount)}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <Badge className={cn('border', getStatusStyle(tx.status))}>

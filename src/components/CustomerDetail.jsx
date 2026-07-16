@@ -16,6 +16,7 @@
     import { Input } from '@/components/ui/input';
     import { Label } from '@/components/ui/label';
     import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+    import { formatCurrency } from '@/lib/utils';
 
     // Signed effect a single transaction has on a customer's balance.
     // Mirrors the balance rules used by the backend so the running total
@@ -83,8 +84,8 @@
                     <td style="padding: 8px;">${new Date(tx.date).toLocaleDateString()}</td>
                     <td style="padding: 8px; text-transform: capitalize;">${tx.type}</td>
                     <td style="padding: 8px;">${tx.memo || tx.reason || ''} ${tx.status === 'voided' ? '(VOIDED)' : ''}</td>
-                    <td style="padding: 8px; text-align: right; font-family: monospace; color: ${tx.type === 'credit' ? 'green' : 'red'};">${tx.type === 'credit' ? '+' : '-'}$${parseFloat(tx.amount).toFixed(2)}</td>
-                    <td style="padding: 8px; text-align: right; font-family: monospace; font-weight: bold;">$${(balanceMap[tx.id] ?? 0).toFixed(2)}</td>
+                    <td style="padding: 8px; text-align: right; font-family: monospace; color: ${tx.type === 'credit' ? 'green' : 'red'};">${tx.type === 'credit' ? '+' : '-'}$${formatCurrency(tx.amount)}</td>
+                    <td style="padding: 8px; text-align: right; font-family: monospace; font-weight: bold;">$${formatCurrency(balanceMap[tx.id] ?? 0)}</td>
                 </tr>`).join('');
 
             const subAccountsHtml = subAccounts.length > 0 ? `<div style="font-size:11px;margin-top:8px;"><strong>Sub-Accounts:</strong><ul style="padding-left:20px;margin:4px 0;">${subAccounts.map(sa => `<li>${sa.first_name} ${sa.last_name} (${sa.account_number})</li>`).join('')}</ul></div>` : '';
@@ -114,14 +115,14 @@
 <div style="margin-bottom:24px;">
   <h3 style="font-size:18px;font-weight:600;border-bottom:1px solid #999;padding-bottom:8px;margin-bottom:16px;">Summary</h3>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center;">
-    <div style="background:#f0f0f0;padding:16px;border-radius:6px;"><p style="font-size:12px;color:#555;">Total Credits</p><p style="font-size:20px;font-weight:bold;color:green;">$${totals.credit.toFixed(2)}</p></div>
-    <div style="background:#f0f0f0;padding:16px;border-radius:6px;"><p style="font-size:12px;color:#555;">Total Debits & Fees</p><p style="font-size:20px;font-weight:bold;color:red;">$${totals.debit.toFixed(2)}</p></div>
-    <div style="background:#e0eeff;padding:16px;border-radius:6px;"><p style="font-size:12px;color:#555;">Current Balance</p><p style="font-size:20px;font-weight:bold;color:#1a5db5;">$${parseFloat(customer.balance).toFixed(2)}</p></div>
+    <div style="background:#f0f0f0;padding:16px;border-radius:6px;"><p style="font-size:12px;color:#555;">Total Credits</p><p style="font-size:20px;font-weight:bold;color:green;">$${formatCurrency(totals.credit)}</p></div>
+    <div style="background:#f0f0f0;padding:16px;border-radius:6px;"><p style="font-size:12px;color:#555;">Total Debits & Fees</p><p style="font-size:20px;font-weight:bold;color:red;">$${formatCurrency(totals.debit)}</p></div>
+    <div style="background:#e0eeff;padding:16px;border-radius:6px;"><p style="font-size:12px;color:#555;">Current Balance</p><p style="font-size:20px;font-weight:bold;color:#1a5db5;">$${formatCurrency(customer.balance)}</p></div>
   </div>
 </div>
 <div>
   <h3 style="font-size:18px;font-weight:600;border-bottom:1px solid #999;padding-bottom:8px;margin-bottom:16px;">Transaction History</h3>
-  <p style="font-size:13px;color:#555;margin-bottom:12px;">Opening balance (before listed activity): <strong>$${openingBalance.toFixed(2)}</strong></p>
+  <p style="font-size:13px;color:#555;margin-bottom:12px;">Opening balance (before listed activity): <strong>$${formatCurrency(openingBalance)}</strong></p>
   ${filteredAndSortedTransactions.length === 0 ? '<p style="text-align:center;padding:24px;color:#888;">No transactions to display.</p>' : `
   <table style="width:100%;border-collapse:collapse;font-size:13px;">
     <thead><tr style="border-bottom:2px solid #000;"><th style="padding:8px;text-align:left;">Date</th><th style="padding:8px;text-align:left;">Type</th><th style="padding:8px;text-align:left;">Memo</th><th style="padding:8px;text-align:right;">Amount</th><th style="padding:8px;text-align:right;">Balance</th></tr></thead>

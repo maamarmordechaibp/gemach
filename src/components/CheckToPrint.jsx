@@ -1,6 +1,7 @@
 import React from 'react';
 import { useData } from '@/contexts/DataContext';
 import { MICRProvider, MICR } from '@/lib/micrFont.jsx';
+import { formatCurrency } from '@/lib/utils';
 
 const numberToWords = (numStr) => {
     const num = parseFloat(numStr);
@@ -67,7 +68,7 @@ const CheckToPrint = ({ checks }) => {
 
                     <div className="absolute top-20 right-4 flex items-center border border-black p-1">
                         <span className="text-sm">$</span>
-                        <p className="text-lg font-bold pl-2">{parseFloat(check.amount).toFixed(2)}</p>
+                        <p className="text-lg font-bold pl-2">{formatCurrency(check.amount)}</p>
                     </div>
                     
                     <div className="absolute top-32 left-4 w-[7in] border-b border-black">

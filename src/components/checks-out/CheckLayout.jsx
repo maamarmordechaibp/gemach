@@ -1,6 +1,7 @@
 
     import React from 'react';
     import { MICR } from '@/lib/micrFont.jsx';
+    import { formatCurrency } from '@/lib/utils';
 
     const CheckLayout = React.forwardRef(({ checks, config }, ref) => {
         if (!checks || checks.length === 0 || !config) {
@@ -84,7 +85,7 @@
                             <span className="value payee-value">{check.pay_to_order_of}</span>
                             <div className="amount-box">
                                 <span className="dollar-sign">$</span>
-                                <span className="amount-value">{amount.toFixed(2)}</span>
+                                <span className="amount-value">{formatCurrency(amount)}</span>
                             </div>
                         </div>
                         <div className="amount-words-line">

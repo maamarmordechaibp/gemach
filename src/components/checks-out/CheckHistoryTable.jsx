@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
 import {
     Tooltip,
     TooltipContent,
@@ -53,7 +54,7 @@ const CheckHistoryTable = ({ checks, onVoid, onReprint, isVoiding, voidingId }) 
                             <TableCell>{check.check_number}</TableCell>
                             <TableCell>{check.customer_name}</TableCell>
                             <TableCell>{check.pay_to_order_of}</TableCell>
-                            <TableCell className="text-right">${check.amount.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">${formatCurrency(check.amount)}</TableCell>
                             <TableCell>
                                 <Badge variant={getStatusVariant(check.status)}>{check.status}</Badge>
                             </TableCell>

@@ -1,4 +1,17 @@
 import React, { useMemo } from 'react';
+import { formatCurrency } from '@/lib/utils';
+
+// Signed effect a single transaction has on a customer's balance.
+const signedEffect = (tx) => {
+    if (tx.status === 'voided') return 0;
+    const amt = parseFloat(tx.amount) || 0;
+    if (tx.type === 'credit' && tx.status !== 'bounced') return amt;
+    if (tx.type === 'transfer') {
+        const memo = (tx.memo || '').toLowerCase();
+        return memo.includes('from') ? amt : -amt;
+    }
+    return -amt;
+};
 
 const Statement = React.forwardRef(({ title, customer, subAccounts, transactions, settings, filters }, ref) => {
     const totals = useMemo(() => {
@@ -14,6 +27,24 @@ const Statement = React.forwardRef(({ title, customer, subAccounts, transactions
             return acc;
         }, { credit: 0, debit: 0 });
     }, [transactions]);
+
+    // Running "balance as of that transaction" for a single-customer statement.
+    // Anchored to the customer's current balance and computed in chronological
+    // order so the balance shown reflects the state after each transaction.
+    const { balanceMap, openingBalance } = useMemo(() => {
+        if (!customer || !transactions || transactions.length === 0) return { balanceMap: {}, openingBalance: 0 };
+        const all = transactions
+            .slice()
+            .sort((a, b) => new Date(a.date) - new Date(b.date) || String(a.id).localeCompare(String(b.id)));
+        const anchor = (parseFloat(customer.balance) || 0)
+            + (subAccounts ? subAccounts.reduce((s, sa) => s + (parseFloat(sa.balance) || 0), 0) : 0);
+        const totalEffect = all.reduce((s, t) => s + signedEffect(t), 0);
+        const opening = anchor - totalEffect;
+        let running = opening;
+        const map = {};
+        for (const t of all) { running += signedEffect(t); map[t.id] = running; }
+        return { balanceMap: map, openingBalance: opening };
+    }, [customer, subAccounts, transactions]);
     
     const companyInfo = settings?.check_config || {};
 
@@ -55,15 +86,15 @@ const Statement = React.forwardRef(({ title, customer, subAccounts, transactions
                 <div className="grid grid-cols-3 gap-4 text-center">
                     <div className="bg-gray-100 p-4 rounded">
                         <p className="text-sm text-gray-600">Total Credits</p>
-                        <p className="text-xl font-bold text-green-600">${totals.credit.toFixed(2)}</p>
+                        <p className="text-xl font-bold text-green-600">${formatCurrency(totals.credit)}</p>
                     </div>
                     <div className="bg-gray-100 p-4 rounded">
                         <p className="text-sm text-gray-600">Total Debits & Fees</p>
-                        <p className="text-xl font-bold text-red-600">${totals.debit.toFixed(2)}</p>
+                        <p className="text-xl font-bold text-red-600">${formatCurrency(totals.debit)}</p>
                     </div>
                      <div className="bg-blue-100 p-4 rounded">
                         <p className="text-sm text-gray-600">Current Balance</p>
-                        <p className="text-xl font-bold text-blue-700">${parseFloat(customer.balance).toFixed(2)}</p>
+                        <p className="text-xl font-bold text-blue-700">${formatCurrency(customer.balance)}</p>
                     </div>
                 </div>
             </section>
@@ -77,10 +108,17 @@ const Statement = React.forwardRef(({ title, customer, subAccounts, transactions
 
         // Determine if we need to show customer names in the table (for general reports)
         const showCustomerColumn = !customer;
+        // Show a running balance column for single-customer statements.
+        const showBalanceColumn = !!customer;
 
         return (
             <section className="my-8">
                 <h3 className="text-xl font-semibold mb-4 border-b border-gray-400 pb-2 text-black">Transaction History</h3>
+                {showBalanceColumn && (
+                    <p className="text-sm text-gray-600 mb-3">
+                        Opening balance (before listed activity): <strong>${formatCurrency(openingBalance)}</strong>
+                    </p>
+                )}
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="border-b-2 border-black">
@@ -89,6 +127,7 @@ const Statement = React.forwardRef(({ title, customer, subAccounts, transactions
                             <th className="p-2 text-left">Type</th>
                             <th className="p-2 text-left">Memo</th>
                             <th className="p-2 text-right">Amount</th>
+                            {showBalanceColumn && <th className="p-2 text-right">Balance</th>}
                         </tr>
                     </thead>
                     <tbody>
@@ -99,8 +138,11 @@ const Statement = React.forwardRef(({ title, customer, subAccounts, transactions
                                 <td className="p-2 capitalize">{tx.type}</td>
                                 <td className="p-2">{tx.memo || tx.reason} {tx.status === 'voided' && '(VOIDED)'}</td>
                                 <td className={`p-2 text-right font-mono ${tx.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
-                                    {tx.type === 'credit' ? '+' : '-'}${parseFloat(tx.amount).toFixed(2)}
+                                    {tx.type === 'credit' ? '+' : '-'}${formatCurrency(tx.amount)}
                                 </td>
+                                {showBalanceColumn && (
+                                    <td className="p-2 text-right font-mono font-bold">${formatCurrency(balanceMap[tx.id] ?? 0)}</td>
+                                )}
                             </tr>
                         ))}
                     </tbody>

@@ -52,6 +52,18 @@ const getTransactionCategory = (tx) => {
   return 'outgoing';
 };
 
+// Signed effect a single transaction has on its account's balance.
+const signedEffect = (tx) => {
+  if (tx.status === 'voided') return 0;
+  const amt = parseFloat(tx.amount) || 0;
+  if (tx.type === 'credit' && tx.status !== 'bounced') return amt;
+  if (tx.type === 'transfer') {
+    const memo = (tx.memo || '').toLowerCase();
+    return memo.includes('from') ? amt : -amt;
+  }
+  return -amt;
+};
+
 const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) => {
       const getCustomerName = (accountNumber) => {
         const customer = customers.find(c => c.account_number === accountNumber);
@@ -181,6 +193,32 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
       
       const transactions = useMemo(() => initialTransactions || allTransactions, [initialTransactions, allTransactions]);
       const customers = useMemo(() => initialCustomers || allCustomers, [initialCustomers, allCustomers]);
+
+      // When no running balances are supplied (e.g. the global "all transactions"
+      // page), compute a per-account balance after each transaction so every row
+      // shows the account balance at that point in time. Each account is anchored
+      // to the customer's current stored balance and walked backwards in time.
+      const computedRunningBalances = useMemo(() => {
+        if (!transactions || !customers) return null;
+        const byAccount = {};
+        for (const tx of transactions) {
+          (byAccount[tx.account_number] = byAccount[tx.account_number] || []).push(tx);
+        }
+        const map = {};
+        for (const [accountNumber, txs] of Object.entries(byAccount)) {
+          const sorted = txs
+            .slice()
+            .sort((a, b) => new Date(a.date) - new Date(b.date) || String(a.id).localeCompare(String(b.id)));
+          const customer = customers.find(c => c.account_number === accountNumber);
+          const anchor = customer ? (parseFloat(customer.balance) || 0) : 0;
+          const totalEffect = sorted.reduce((s, t) => s + signedEffect(t), 0);
+          let running = anchor - totalEffect;
+          for (const t of sorted) { running += signedEffect(t); map[t.id] = running; }
+        }
+        return map;
+      }, [transactions, customers]);
+
+      const effectiveRunningBalances = runningBalances || computedRunningBalances;
 
       // Filter and sort transactions
       const filteredAndSortedTransactions = useMemo(() => {
@@ -591,7 +629,7 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                             )}
                           </Button>
                         </th>
-                        {runningBalances && (
+                        {effectiveRunningBalances && (
                           <th className="px-6 py-4 text-right text-sm font-medium text-slate-300">Balance</th>
                         )}
                         <th className="px-6 py-4 text-center text-sm font-medium text-slate-300">Status</th>
@@ -599,7 +637,7 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700/50">
-                      <TransactionsList transactions={paginatedTransactions} customers={customers} onVoid={setVoidingTransaction} runningBalances={runningBalances} />
+                      <TransactionsList transactions={paginatedTransactions} customers={customers} onVoid={setVoidingTransaction} runningBalances={effectiveRunningBalances} />
                     </tbody>
                   </table>
                 </div>

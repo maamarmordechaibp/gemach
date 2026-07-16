@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useTransactionLogic } from '@/hooks/useTransactionLogic';
+import { formatCurrency } from '@/lib/utils';
 
 const AddTransactionModal = ({ isOpen, onClose, setActiveSection }) => {
   const { customers, loans, refreshData, settings } = useData();
@@ -51,12 +52,12 @@ ${companyInfo.address1 ? `<div>${companyInfo.address1}</div>` : ''}${companyInfo
 <div class="row bold"><span>Customer:</span><span>${custName}</span></div>
 <div class="row"><span>Account:</span><span>${acctNum}</span></div>
 <div class="line"></div>
-${creditAmt > 0 ? `<div class="row"><span>Credit/Deposit:</span><span>+$${creditAmt.toFixed(2)}</span></div>` : ''}
-${debitAmt > 0 ? `<div class="row"><span>Debit/Withdrawal:</span><span>-$${debitAmt.toFixed(2)}</span></div>` : ''}
-${feeAmt > 0 ? `<div class="row"><span>Fees:</span><span>-$${feeAmt.toFixed(2)}</span></div>` : ''}
-${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transferAmt.toFixed(2)}</span></div>` : ''}
+${creditAmt > 0 ? `<div class="row"><span>Credit/Deposit:</span><span>+$${formatCurrency(creditAmt)}</span></div>` : ''}
+${debitAmt > 0 ? `<div class="row"><span>Debit/Withdrawal:</span><span>-$${formatCurrency(debitAmt)}</span></div>` : ''}
+${feeAmt > 0 ? `<div class="row"><span>Fees:</span><span>-$${formatCurrency(feeAmt)}</span></div>` : ''}
+${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${formatCurrency(transferAmt)}</span></div>` : ''}
 <div class="line"></div>
-<div class="row bold big"><span>Balance:</span><span>$${newBalance.toFixed(2)}</span></div>
+<div class="row bold big"><span>Balance:</span><span>$${formatCurrency(newBalance)}</span></div>
 <div class="line"></div>
 <div class="center mt">Thank you!</div>
 </body></html>`;
@@ -151,12 +152,6 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${transf
     e.preventDefault();
     if (!selectedCustomer || !transactionState) { toast({ title: "No Customer Selected", variant: "destructive" }); return; }
     if (totalCredit <= 0 && totalDebit <= 0 && (parseFloat(transactionState.transferDetails?.amount) || 0) <= 0) { toast({ title: "Empty Transaction", variant: "destructive" }); return; }
-    
-    const maxTransactionAmount = 25000;
-    if (totalCredit > maxTransactionAmount || totalDebit > maxTransactionAmount) {
-      toast({ title: "Transaction Limit Exceeded", description: `Transactions cannot exceed $${maxTransactionAmount.toLocaleString()}.`, variant: "destructive" });
-      return;
-    }
 
     if ((parseFloat(transactionState.transferDetails?.amount) || 0) > 0 && !transactionState.transferDetails.toAccount) {
       toast({ title: "Recipient required", description: "Please select a recipient for the transfer.", variant: "destructive" });

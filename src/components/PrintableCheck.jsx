@@ -141,7 +141,7 @@ const PrintableCheck = React.forwardRef(({ checks }, ref) => {
 
                         {/* MICR line with correct formatting at bottom */}
                         <div className="absolute" style={{ bottom: '0.2in', left: '0.5in', right: '0.5in' }}>
-                            <MICR text={`C${check.check_number}C A${checkConfig.routing_number || '021300077'}A ${checkConfig.account_number || '1234567890'}C`} />
+                            <MICR text={`${check.check_number} A${checkConfig.routing_number || '021300077'}A ${checkConfig.account_number || '1234567890'}C`} />
                         </div>
                     </div>
                 ))}

@@ -18,6 +18,26 @@
           const [loading, setLoading] = useState(true);
           const { addLog } = useLog();
 
+          // Supabase/PostgREST caps each response at ~1000 rows regardless of .limit().
+          // Fetch every row by paging through the table with .range() until exhausted.
+          const fetchAllRows = useCallback(async (table) => {
+            const pageSize = 1000;
+            let from = 0;
+            let allRows = [];
+            while (true) {
+              const { data, error } = await supabase
+                .from(table)
+                .select('*')
+                .order('date', { ascending: false })
+                .range(from, from + pageSize - 1);
+              if (error) return { data: null, error };
+              if (data && data.length > 0) allRows = allRows.concat(data);
+              if (!data || data.length < pageSize) break;
+              from += pageSize;
+            }
+            return { data: allRows, error: null };
+          }, []);
+
           const fetchData = useCallback(async () => {
             if (!session) {
               setLoading(false);
@@ -38,9 +58,9 @@
                 { data: systemSettingsData, error: systemSettingsError },
               ] = await Promise.all([
                 supabase.from('customers').select('*'),
-                supabase.from('transactions').select('*').order('date', { ascending: false }).limit(50000),
-                supabase.from('checks_in').select('*').order('date', { ascending: false }).limit(50000),
-                supabase.from('checks_out').select('*').order('date', { ascending: false }).limit(50000),
+                fetchAllRows('transactions'),
+                fetchAllRows('checks_in'),
+                fetchAllRows('checks_out'),
                 supabase.from('loans').select('*'),
                 supabase.from('alerts').select('*'),
                 supabase.from('document_templates').select('*'),
@@ -74,7 +94,7 @@
             } finally {
               setLoading(false);
             }
-          }, [session, addLog]);
+          }, [session, addLog, fetchAllRows]);
 
           useEffect(() => {
             if (session) {

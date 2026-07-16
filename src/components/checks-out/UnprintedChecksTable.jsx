@@ -1,7 +1,7 @@
 
     import React from 'react';
     import { Checkbox } from '@/components/ui/checkbox';
-    import { cn } from '@/lib/utils';
+    import { cn, formatCurrency } from '@/lib/utils';
     import { Inbox } from 'lucide-react';
 
     const UnprintedChecksTable = ({ checks, selectedChecks, onSelectCheck, onSelectAll }) => {
@@ -49,7 +49,7 @@
                   <td className="p-3 font-mono">{check.check_number}</td>
                   <td className="p-3">{check.customer_name}</td>
                   <td className="p-3">{check.pay_to_order_of}</td>
-                  <td className="p-3 text-right font-mono">${parseFloat(check.amount).toFixed(2)}</td>
+                  <td className="p-3 text-right font-mono">${formatCurrency(check.amount)}</td>
                 </tr>
               ))}
             </tbody>

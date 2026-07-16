@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatCurrency } from '@/lib/utils';
 
 const GlobalReport = React.forwardRef(({ title, headers, data, settings, filters }, ref) => {
   const companyInfo = settings?.check_config || {};
@@ -64,7 +65,7 @@ const GlobalReport = React.forwardRef(({ title, headers, data, settings, filters
                      value = row.customerName || "N/A";
                    }
                    if(headerKey === 'balance' || headerKey === 'amount') {
-                     value = `$${parseFloat(value).toFixed(2)}`;
+                     value = `$${formatCurrency(value)}`;
                    }
                    return <td key={cellIndex} className="p-2">{String(value ?? '')}</td>;
                 })}
