@@ -21,22 +21,48 @@
       switch (type) {
         case 'credit':
           return (
-            <CreditForm
-              creditCash={transactionState.creditCash}
-              creditChecks={transactionState.creditChecks}
-              onInputChange={handleInputChange}
-              onListChange={handleListChange}
-              customerId={customer?.id}
-            />
+            <div className="space-y-4">
+              <CreditForm
+                creditCash={transactionState.creditCash}
+                creditChecks={transactionState.creditChecks}
+                onInputChange={handleInputChange}
+                onListChange={handleListChange}
+                customerId={customer?.id}
+              />
+              <div>
+                <label htmlFor="credit-note" className="text-sm font-medium text-muted-foreground">Note (optional)</label>
+                <input
+                  id="credit-note"
+                  type="text"
+                  placeholder="Add a note for this deposit..."
+                  value={transactionState.creditNote || ''}
+                  onChange={(e) => handleInputChange('creditNote', e.target.value)}
+                  className="mt-1 w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
           );
         case 'debit':
           return (
-            <DebitForm
-              debitCashEntries={transactionState.debitCashEntries}
-              debitChecks={transactionState.debitChecks}
-              onListChange={handleListChange}
-              customer={customer}
-            />
+            <div className="space-y-4">
+              <DebitForm
+                debitCashEntries={transactionState.debitCashEntries}
+                debitChecks={transactionState.debitChecks}
+                onListChange={handleListChange}
+                customer={customer}
+              />
+              <div>
+                <label htmlFor="debit-note" className="text-sm font-medium text-muted-foreground">Note (optional)</label>
+                <input
+                  id="debit-note"
+                  type="text"
+                  placeholder="Add a note for this withdrawal..."
+                  value={transactionState.debitNote || ''}
+                  onChange={(e) => handleInputChange('debitNote', e.target.value)}
+                  className="mt-1 w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
           );
         case 'transfer':
           return (

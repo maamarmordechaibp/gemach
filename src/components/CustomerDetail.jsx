@@ -13,6 +13,7 @@
       CardDescription
     } from '@/components/ui/card.jsx';
     import Transactions from '@/components/Transactions';
+    import PayMyLoanModal from '@/components/PayMyLoanModal';
     import { Input } from '@/components/ui/input';
     import { Label } from '@/components/ui/label';
     import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -34,17 +35,38 @@
 
     const CustomerDetail = () => {
         const { id } = useParams();
-        const { customers, transactions, settings, loading } = useData();
+        const { customers, transactions, loans, settings, loading } = useData();
         
         const customer = useMemo(() => customers.find(c => c.id === id), [customers, id]);
+        const [isPayLoanOpen, setIsPayLoanOpen] = useState(false);
+
+        // Outstanding loans for this customer (used to surface "Pay My Loan").
+        const hasOutstandingLoans = useMemo(() => {
+            if (!customer || !loans) return false;
+            return loans.some(l => l.customer_id === customer.id && l.status !== 'paid'
+                && (l.remaining_balance != null ? parseFloat(l.remaining_balance) : parseFloat(l.amount || 0)) > 0);
+        }, [loans, customer]);
+
+        const canPayLoan = hasOutstandingLoans
+            && customer
+            && ((parseFloat(customer.balance) || 0) + (parseFloat(customer.overdraft_limit) || 0)) > 0;
         
         const [filters, setFilters] = useState({ startDate: '', endDate: '', type: 'both' });
         const [sort, setSort] = useState({ key: 'date', order: 'desc' });
+        // Parent statements show ONLY this account's own transactions by default.
+        // Sub-account activity is included only when explicitly requested.
+        const [includeSubAccounts, setIncludeSubAccounts] = useState(false);
 
         const subAccounts = useMemo(() => {
             if (!customer) return [];
             return customers.filter(c => c.parent_account_id === customer.account_number);
         }, [customers, customer]);
+
+        // The sub-accounts actually folded into the statement / running balance.
+        const includedSubAccounts = useMemo(
+            () => (includeSubAccounts ? subAccounts : []),
+            [includeSubAccounts, subAccounts]
+        );
 
         // Running "balance as of that date" for every transaction on this account
         // (including sub-accounts). Computed over the FULL history in chronological
@@ -53,20 +75,20 @@
         // the first recorded transaction (e.g. preview-mode / pre-launch activity).
         const { balanceMap, openingBalance } = useMemo(() => {
             if (!transactions || !customer) return { balanceMap: {}, openingBalance: 0 };
-            const allAccountNumbers = [customer.account_number, ...subAccounts.map(sa => sa.account_number)];
+            const allAccountNumbers = [customer.account_number, ...includedSubAccounts.map(sa => sa.account_number)];
             const all = transactions
                 .filter(t => allAccountNumbers.includes(t.account_number))
                 .slice()
                 .sort((a, b) => new Date(a.date) - new Date(b.date) || String(a.id).localeCompare(String(b.id)));
             const anchor = (parseFloat(customer.balance) || 0)
-                + subAccounts.reduce((s, sa) => s + (parseFloat(sa.balance) || 0), 0);
+                + includedSubAccounts.reduce((s, sa) => s + (parseFloat(sa.balance) || 0), 0);
             const totalEffect = all.reduce((s, t) => s + signedEffect(t), 0);
             const opening = anchor - totalEffect;
             let running = opening;
             const map = {};
             for (const t of all) { running += signedEffect(t); map[t.id] = running; }
             return { balanceMap: map, openingBalance: opening };
-        }, [transactions, customer, subAccounts]);
+        }, [transactions, customer, includedSubAccounts]);
         
         const handlePrint = () => {
             if (!customer) return;
@@ -88,7 +110,7 @@
                     <td style="padding: 8px; text-align: right; font-family: monospace; font-weight: bold;">$${formatCurrency(balanceMap[tx.id] ?? 0)}</td>
                 </tr>`).join('');
 
-            const subAccountsHtml = subAccounts.length > 0 ? `<div style="font-size:11px;margin-top:8px;"><strong>Sub-Accounts:</strong><ul style="padding-left:20px;margin:4px 0;">${subAccounts.map(sa => `<li>${sa.first_name} ${sa.last_name} (${sa.account_number})</li>`).join('')}</ul></div>` : '';
+            const subAccountsHtml = includedSubAccounts.length > 0 ? `<div style="font-size:11px;margin-top:8px;"><strong>Sub-Accounts (included):</strong><ul style="padding-left:20px;margin:4px 0;">${includedSubAccounts.map(sa => `<li>${sa.first_name} ${sa.last_name} (${sa.account_number})</li>`).join('')}</ul></div>` : '';
 
             const printWindow = window.open('', '_blank', 'width=900,height=700');
             if (!printWindow) return;
@@ -137,7 +159,7 @@
 
         const filteredAndSortedTransactions = useMemo(() => {
             if (!transactions || !customer) return [];
-            const allAccountNumbers = [customer.account_number, ...subAccounts.map(sa => sa.account_number)];
+            const allAccountNumbers = [customer.account_number, ...includedSubAccounts.map(sa => sa.account_number)];
             let customerTransactions = transactions.filter(t => allAccountNumbers.includes(t.account_number));
 
             if (filters.startDate) {
@@ -170,7 +192,7 @@
             });
 
             return customerTransactions;
-        }, [transactions, customer, subAccounts, filters, sort]);
+        }, [transactions, customer, subAccounts, filters, sort, includedSubAccounts]);
         
         if (loading) {
             return (
@@ -209,7 +231,23 @@
                                 </CardTitle>
                                 <CardDescription className="text-md text-muted-foreground mt-1">Customer Details</CardDescription>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex items-center gap-3 flex-wrap">
+                                {canPayLoan && (
+                                    <Button onClick={() => setIsPayLoanOpen(true)} className="bg-gradient-to-r from-green-500 to-teal-500">
+                                        <DollarSign className="mr-2 h-4 w-4" /> Pay My Loan
+                                    </Button>
+                                )}
+                                {subAccounts.length > 0 && (
+                                    <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={includeSubAccounts}
+                                            onChange={(e) => setIncludeSubAccounts(e.target.checked)}
+                                            className="h-4 w-4 rounded border-border accent-primary"
+                                        />
+                                        Include sub-accounts
+                                    </label>
+                                )}
                                 <Button onClick={handlePrint}>
                                     <Printer className="mr-2 h-4 w-4" /> Print Statement
                                 </Button>
@@ -300,6 +338,7 @@
                     </CardContent>
                 </Card>
                 
+                <PayMyLoanModal isOpen={isPayLoanOpen} onClose={() => setIsPayLoanOpen(false)} customer={customer} />
             </motion.div>
         );
     };

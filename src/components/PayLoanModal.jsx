@@ -21,6 +21,10 @@ import {
 
 const fmt = (n) => parseFloat(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Outstanding balance for a loan. Prefers the explicit remaining_balance column,
+// falling back to `amount` for records created before the column existed.
+const getRemaining = (l) => (l && l.remaining_balance != null ? parseFloat(l.remaining_balance) : parseFloat(l?.amount || 0));
+
 const PayLoanModal = ({ isOpen, onClose, loan }) => {
   const { customers, loans, refreshData } = useData();
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -34,7 +38,7 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
   const customerLoans = useMemo(() => {
     if (!customer) return [];
     return loans
-      .filter(l => l.customer_id === customer.id && l.status !== 'paid' && parseFloat(l.amount) > 0)
+      .filter(l => l.customer_id === customer.id && l.status !== 'paid' && getRemaining(l) > 0)
       .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
   }, [loans, customer]);
 
@@ -55,7 +59,7 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
     let remaining = paymentNum;
     return customerLoans.map(l => {
       if (!selectedIds.has(l.id)) return { loan: l, alloc: 0 };
-      const amt = parseFloat(l.amount);
+      const amt = getRemaining(l);
       const alloc = Math.min(remaining, amt);
       remaining = Math.max(0, remaining - alloc);
       return { loan: l, alloc };
@@ -65,7 +69,7 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
   const totalAllocated = useMemo(() => allocations.reduce((s, a) => s + a.alloc, 0), [allocations]);
   const leftover = Math.max(0, paymentNum - totalAllocated);
   const totalSelectedOwed = useMemo(
-    () => customerLoans.filter(l => selectedIds.has(l.id)).reduce((s, l) => s + parseFloat(l.amount), 0),
+    () => customerLoans.filter(l => selectedIds.has(l.id)).reduce((s, l) => s + getRemaining(l), 0),
     [customerLoans, selectedIds]
   );
 
@@ -122,12 +126,12 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
 
       for (const { loan: l, alloc } of allocations) {
         if (alloc <= 0) continue;
-        const remaining = parseFloat(l.amount) - alloc;
+        const remaining = getRemaining(l) - alloc;
         const newStatus = remaining <= 0.001 ? 'paid' : (l.status === 'overdue' ? 'overdue' : 'active');
 
         const { error: loanError } = await supabase
           .from('loans')
-          .update({ amount: Math.max(0, remaining), status: newStatus })
+          .update({ remaining_balance: Math.max(0, remaining), status: newStatus })
           .eq('id', l.id);
         if (loanError) throw loanError;
 
@@ -238,7 +242,7 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
                 ) : (
                   allocations.map(({ loan: l, alloc }) => {
                     const selected = selectedIds.has(l.id);
-                    const remaining = parseFloat(l.amount) - alloc;
+                    const remaining = getRemaining(l) - alloc;
                     const willBePaid = selected && alloc > 0 && remaining <= 0.001;
                     return (
                       <div
@@ -251,7 +255,7 @@ const PayLoanModal = ({ isOpen, onClose, loan }) => {
                         <Checkbox checked={selected} onCheckedChange={() => toggleLoan(l.id)} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-foreground">${fmt(l.amount)}</span>
+                            <span className="font-medium text-foreground">${fmt(getRemaining(l))}</span>
                             {willBePaid && (
                               <span className="inline-flex items-center gap-1 text-xs text-green-400">
                                 <CheckCircle2 className="h-3 w-3" /> Paid off

@@ -16,6 +16,8 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer, initialData }) => {
     last_name: '',
     phone_number: '',
     balance: 0,
+    account_type: 'standard',
+    overdraft_limit: 0,
     parent_account_id: null,
     ...initialData
   });
@@ -47,6 +49,8 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer, initialData }) => {
           last_name: customer.last_name || '',
           phone_number: customer.phone_number || '',
           balance: customer.balance || 0,
+          account_type: customer.account_type || 'standard',
+          overdraft_limit: customer.overdraft_limit || 0,
           parent_account_id: customer.parent_account_id || null
         });
       } else {
@@ -61,7 +65,12 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer, initialData }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({ ...formData, balance: parseFloat(formData.balance) || 0 });
+    onSave({
+      ...formData,
+      balance: parseFloat(formData.balance) || 0,
+      account_type: formData.account_type || 'standard',
+      overdraft_limit: formData.account_type === 'overdraft' ? (parseFloat(formData.overdraft_limit) || 0) : 0,
+    });
   };
 
   const handleChange = (e) => {
@@ -254,6 +263,37 @@ const CustomerModal = ({ isOpen, onClose, onSave, customer, initialData }) => {
                   />
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Account Type</label>
+                <select
+                  name="account_type"
+                  value={formData.account_type || 'standard'}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="standard">Standard</option>
+                  <option value="overdraft">Overdraft</option>
+                </select>
+              </div>
+              {formData.account_type === 'overdraft' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Overdraft Limit</label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type="number"
+                      name="overdraft_limit"
+                      value={formData.overdraft_limit}
+                      onChange={handleChange}
+                      step="0.01"
+                      min="0"
+                      className="w-full pl-10 pr-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">Maximum amount the balance may go negative. This is an overdraft facility, not a loan.</p>
+                </div>
+              )}
               <div className="flex space-x-3 pt-4">
                 <Button type="button" variant="outline" onClick={onClose} className="flex-1 border-slate-600 text-slate-300 hover:bg-slate-700">
                   Cancel

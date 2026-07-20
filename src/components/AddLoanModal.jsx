@@ -59,7 +59,15 @@ const AddLoanModal = ({ isOpen, onClose }) => {
     setIsProcessing(true);
     try {
       const { data: loanData, error: loanError } = await supabase
-        .from('loans').insert({ customer_id: selectedCustomer.id, amount: totalLoanAmount, due_date: dueDate, status: 'active' }).select().single();
+        .from('loans').insert({
+          customer_id: selectedCustomer.id,
+          amount: totalLoanAmount,
+          original_amount: totalLoanAmount,
+          remaining_balance: totalLoanAmount,
+          account_number: selectedCustomer.account_number,
+          due_date: dueDate,
+          status: 'active'
+        }).select().single();
       if (loanError) throw loanError;
 
       const txDate = new Date().toISOString();

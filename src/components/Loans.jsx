@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { Coins, AlertTriangle, Plus, Download, History, X, ChevronDown, ChevronRight, Layers } from 'lucide-react';
+import { Coins, AlertTriangle, Plus, Download, History, X, ChevronDown, ChevronRight, Layers, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn, isLoanOverdue } from '@/lib/utils';
 import AddLoanModal from '@/components/AddLoanModal';
@@ -10,6 +10,18 @@ import PayLoanModal from '@/components/PayLoanModal';
 import AdminPasswordDialog from './AdminPasswordDialog';
 
 const fmtMoney = (n) => parseFloat(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// A loan's original disbursed amount. Falls back to `amount` for records created
+// before the original_amount column existed.
+const originalOf = (loan) => parseFloat(loan.original_amount != null ? loan.original_amount : (loan.amount || 0));
+
+// A loan's current outstanding balance. Paid loans are always $0. Falls back to
+// `amount` (which older code reduced on repayment) when remaining_balance is absent.
+const remainingOf = (loan) => {
+  if (loan.status === 'paid') return 0;
+  if (loan.remaining_balance != null) return Math.max(0, parseFloat(loan.remaining_balance) || 0);
+  return Math.max(0, parseFloat(loan.amount || 0));
+};
 
 // Modal showing the full payment history for a single loan: the original
 // disbursement plus every repayment recorded against it (transactions whose
@@ -25,10 +37,8 @@ const LoanHistoryModal = ({ loan, onClose }) => {
   }, [transactions, loan]);
 
   const totalPaid = useMemo(
-    () => loanTransactions
-      .filter(t => t.type === 'credit' && t.status !== 'voided')
-      .reduce((s, t) => s + parseFloat(t.amount || 0), 0),
-    [loanTransactions]
+    () => (loan ? Math.max(0, originalOf(loan) - remainingOf(loan)) : 0),
+    [loan]
   );
 
   if (!loan) return null;
@@ -51,15 +61,20 @@ const LoanHistoryModal = ({ loan, onClose }) => {
                 <p className="text-sm text-muted-foreground">
                   {loan.customer?.first_name} {loan.customer?.last_name} · {loan.customer?.account_number}
                 </p>
+                <p className="text-xs text-muted-foreground">Linked Account #: {loan.account_number || loan.customer?.account_number || '—'}</p>
               </div>
             </div>
             <Button variant="ghost" size="icon" onClick={onClose}><X className="h-5 w-5" /></Button>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 p-6 border-b border-border text-center">
+          <div className="grid grid-cols-4 gap-4 p-6 border-b border-border text-center">
+            <div>
+              <p className="text-xs text-muted-foreground">Loan Amount</p>
+              <p className="text-lg font-bold text-foreground">${fmtMoney(originalOf(loan))}</p>
+            </div>
             <div>
               <p className="text-xs text-muted-foreground">Remaining</p>
-              <p className="text-lg font-bold text-foreground">${fmtMoney(loan.amount)}</p>
+              <p className={cn('text-lg font-bold', remainingOf(loan) > 0 ? 'text-orange-400' : 'text-green-400')}>${fmtMoney(remainingOf(loan))}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Total Paid</p>
@@ -109,6 +124,7 @@ const Loans = () => {
   const [historyLoan, setHistoryLoan] = useState(null);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [expanded, setExpanded] = useState(() => new Set());
+  const [searchTerm, setSearchTerm] = useState('');
 
   const toggleExpand = (customerId) => {
     setExpanded(prev => {
@@ -125,18 +141,38 @@ const Loans = () => {
     }).filter(loan => loan.customer);
   }, [loans, customers]);
 
+  // Loan search: matches customer name, customer number, loan number,
+  // linked account number, or loan status.
+  const filteredLoans = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return loansWithCustomerData;
+    return loansWithCustomerData.filter(loan => {
+      const c = loan.customer || {};
+      const status = isLoanOverdue(loan) ? 'overdue' : (loan.status || '');
+      const accountNumber = loan.account_number || c.account_number || '';
+      const haystack = [
+        `${c.first_name || ''} ${c.last_name || ''}`,
+        c.account_number || '',
+        loan.id || '',
+        accountNumber,
+        status,
+      ].join(' ').toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [loansWithCustomerData, searchTerm]);
+
   // Group loans by customer so a customer with several loans is shown once,
   // with an indicator, and their individual loans can be expanded on demand.
   const groupedLoans = useMemo(() => {
     const map = new Map();
-    loansWithCustomerData.forEach(loan => {
+    filteredLoans.forEach(loan => {
       const key = loan.customer.id;
       if (!map.has(key)) map.set(key, { customer: loan.customer, loans: [] });
       map.get(key).loans.push(loan);
     });
     return Array.from(map.values()).map(g => ({
       ...g,
-      totalAmount: g.loans.reduce((s, l) => s + parseFloat(l.amount || 0), 0),
+      totalAmount: g.loans.reduce((s, l) => s + remainingOf(l), 0),
       hasOverdue: g.loans.some(l => isLoanOverdue(l)),
       earliestDue: g.loans.reduce((min, l) => {
         if (!l.due_date) return min;
@@ -144,7 +180,7 @@ const Loans = () => {
         return (!min || d < min) ? d : min;
       }, null),
     }));
-  }, [loansWithCustomerData]);
+  }, [filteredLoans]);
 
   const handleAddLoanClick = () => {
     if (isAdmin) {
@@ -155,15 +191,16 @@ const Loans = () => {
   };
 
   const exportToCSV = () => {
-    const headers = ['loan_id', 'customer_name', 'account_number', 'amount', 'due_date', 'status'];
+    const headers = ['loan_id', 'customer_name', 'account_number', 'loan_amount', 'remaining_balance', 'due_date', 'status'];
     const csvRows = [headers.join(',')];
     
-    loansWithCustomerData.forEach(loan => {
+    filteredLoans.forEach(loan => {
         const row = [
             loan.id,
             `"${loan.customer.first_name} ${loan.customer.last_name}"`,
-            loan.customer.account_number,
-            loan.amount,
+            loan.account_number || loan.customer.account_number,
+            originalOf(loan).toFixed(2),
+            remainingOf(loan).toFixed(2),
             loan.due_date,
             loan.status
         ];
@@ -210,6 +247,17 @@ const Loans = () => {
         </div>
       </div>
 
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+        <input
+          type="text"
+          placeholder="Search loans by customer name, customer #, loan #, account #, or status..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-10 pr-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+      </div>
+
       <motion.div
         className="bg-card backdrop-blur-xl border border-border rounded-xl overflow-hidden"
       >
@@ -218,7 +266,9 @@ const Loans = () => {
             <thead className="bg-secondary/50">
               <tr>
                 <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Customer</th>
-                <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Amount</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Account #</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Loan Amount</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Remaining</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Due Date</th>
                 <th className="px-6 py-4 text-center text-sm font-medium text-muted-foreground">Status</th>
                 <th className="px-6 py-4 text-right text-sm font-medium text-muted-foreground">Actions</th>
@@ -237,7 +287,9 @@ const Loans = () => {
                   return (
                     <tr key={loan.id} className={cn('transition-colors', status !== 'paid' && 'hover:bg-accent')}>
                       <td className="px-6 py-4 text-foreground font-medium">{group.customer.first_name} {group.customer.last_name}</td>
-                      <td className="px-6 py-4 text-foreground font-bold">${parseFloat(loan.amount).toLocaleString()}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{loan.account_number || group.customer.account_number || '—'}</td>
+                      <td className="px-6 py-4 text-foreground font-bold">${fmtMoney(originalOf(loan))}</td>
+                      <td className={cn('px-6 py-4 font-bold', remainingOf(loan) > 0 ? 'text-orange-400' : 'text-green-400')}>${fmtMoney(remainingOf(loan))}</td>
                       <td className="px-6 py-4 text-muted-foreground">{loan.due_date ? new Date(loan.due_date).toLocaleDateString() : '—'}</td>
                       <td className="px-6 py-4 text-center">
                         <div className={cn("inline-flex items-center justify-center space-x-2 px-3 py-1 rounded-full", config.bg)}>
@@ -279,7 +331,9 @@ const Loans = () => {
                           <span className="ml-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary">{group.loans.length} loans</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-foreground font-bold">${group.totalAmount.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{group.customer.account_number || '—'}</td>
+                      <td className="px-6 py-4 text-foreground font-bold">${fmtMoney(group.loans.reduce((s, l) => s + originalOf(l), 0))}</td>
+                      <td className="px-6 py-4 text-orange-400 font-bold">${fmtMoney(group.totalAmount)}</td>
                       <td className="px-6 py-4 text-muted-foreground">{group.earliestDue ? new Date(group.earliestDue).toLocaleDateString() : '—'}</td>
                       <td className="px-6 py-4 text-center">
                         <div className={cn("inline-flex items-center justify-center space-x-2 px-3 py-1 rounded-full", groupConfig.bg)}>
@@ -295,7 +349,9 @@ const Loans = () => {
                       return (
                         <tr key={loan.id} className="bg-background/40">
                           <td className="px-6 py-3 pl-16 text-sm text-muted-foreground">Loan</td>
-                          <td className="px-6 py-3 text-foreground font-semibold">${parseFloat(loan.amount).toLocaleString()}</td>
+                          <td className="px-6 py-3 text-muted-foreground">{loan.account_number || group.customer.account_number || '—'}</td>
+                          <td className="px-6 py-3 text-foreground font-semibold">${fmtMoney(originalOf(loan))}</td>
+                          <td className={cn('px-6 py-3 font-semibold', remainingOf(loan) > 0 ? 'text-orange-400' : 'text-green-400')}>${fmtMoney(remainingOf(loan))}</td>
                           <td className="px-6 py-3 text-muted-foreground">{loan.due_date ? new Date(loan.due_date).toLocaleDateString() : '—'}</td>
                           <td className="px-6 py-3 text-center">
                             <div className={cn("inline-flex items-center justify-center space-x-2 px-3 py-1 rounded-full", config.bg)}>
@@ -323,7 +379,7 @@ const Loans = () => {
                 );
               }) : (
                 <tr>
-                  <td colSpan="5" className="text-center py-12 text-muted-foreground">
+                  <td colSpan="7" className="text-center py-12 text-muted-foreground">
                     <Coins className="mx-auto h-12 w-12 text-gray-500" />
                     <p className="mt-2">No loans found.</p>
                   </td>

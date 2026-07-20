@@ -27,6 +27,10 @@ import {
 import { useTransactionLogic } from '@/hooks/useTransactionLogic';
 import { formatCurrency } from '@/lib/utils';
 
+// Outstanding balance for a loan. Prefers the explicit remaining_balance column,
+// falling back to `amount` for records created before the column existed.
+const loanRemaining = (l) => (l && l.remaining_balance != null ? parseFloat(l.remaining_balance) : parseFloat(l?.amount || 0));
+
 const AddTransactionModal = ({ isOpen, onClose, setActiveSection }) => {
   const { customers, loans, refreshData, settings } = useData();
   const { isAdmin } = useAuth();
@@ -227,16 +231,16 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
     try {
       const active = (allocations || []).filter(a => a.alloc > 0.001);
       if (active.length === 0) return;
-      const totalPayment = active.reduce((s, a) => s + Math.min(a.alloc, parseFloat(a.loan.amount)), 0);
+      const totalPayment = active.reduce((s, a) => s + Math.min(a.alloc, loanRemaining(a.loan)), 0);
 
       // 1. Reduce each loan record by its allocated amount.
       for (const { loan, alloc } of active) {
-        const payment = Math.min(alloc, parseFloat(loan.amount));
-        const remaining = parseFloat(loan.amount) - payment;
+        const payment = Math.min(alloc, loanRemaining(loan));
+        const remaining = loanRemaining(loan) - payment;
         const newStatus = remaining <= 0.001 ? 'paid' : 'active';
         const { error } = await supabase
           .from('loans')
-          .update({ amount: Math.max(0, remaining), status: newStatus })
+          .update({ remaining_balance: Math.max(0, remaining), status: newStatus })
           .eq('id', loan.id);
         if (error) throw error;
       }
@@ -277,7 +281,7 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
           id: `REPAY-${Date.now()}-${i}-${a.loan.id.slice(0, 8)}`,
           account_number: payer.account_number,
           type: 'credit',
-          amount: Math.min(a.alloc, parseFloat(a.loan.amount)),
+          amount: Math.min(a.alloc, loanRemaining(a.loan)),
           date: dep.date,
           status: 'completed',
           loan_id: a.loan.id,
@@ -307,7 +311,7 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
           id: `REPAY-${Date.now()}-${i}-${a.loan.id.slice(0, 8)}`,
           account_number: payer.account_number,
           type: 'credit',
-          amount: Math.min(a.alloc, parseFloat(a.loan.amount)),
+          amount: Math.min(a.alloc, loanRemaining(a.loan)),
           date: new Date().toISOString(),
           status: 'completed',
           loan_id: a.loan.id,
@@ -336,11 +340,11 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
     const result = await handleSubmit();
     if (result?.success && applyToLoan && promptLoans.length && applyAmount > 0) {
       const sorted = promptLoans
-        .filter(l => parseFloat(l.amount) > 0 && l.status !== 'paid')
+        .filter(l => loanRemaining(l) > 0 && l.status !== 'paid')
         .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
       let remaining = applyAmount;
       const allocations = sorted.map(l => {
-        const amt = parseFloat(l.amount);
+        const amt = loanRemaining(l);
         const alloc = Math.min(remaining, amt);
         remaining = Math.max(0, remaining - alloc);
         return { loan: l, alloc };

@@ -40,6 +40,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import AddTransferModal from '@/components/AddTransferModal';
 
 // Classify a transaction into a high-level category for filtering:
 //  - 'loan'     : loan repayments / disbursements (linked loan or "loan" memo)
@@ -189,6 +190,7 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
       const [sortBy, setSortBy] = useState('date');
       const [sortOrder, setSortOrder] = useState('desc');
       const [currentPage, setCurrentPage] = useState(1);
+      const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
       const itemsPerPage = 25;
       
       const transactions = useMemo(() => initialTransactions || allTransactions, [initialTransactions, allTransactions]);
@@ -394,10 +396,16 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                 <h1 className="text-3xl font-bold text-foreground">Transaction History</h1>
                 <p className="text-muted-foreground">Complete log of all financial movements</p>
               </div>
-              <Button onClick={exportToCSV} variant="outline" disabled={filteredAndSortedTransactions.length === 0}>
-                <Download className="h-4 w-4 mr-2" />
-                Export CSV
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => setIsTransferModalOpen(true)} className="bg-gradient-to-r from-blue-500 to-indigo-500">
+                  <ArrowUpDown className="h-4 w-4 mr-2" />
+                  Add Transfer
+                </Button>
+                <Button onClick={exportToCSV} variant="outline" disabled={filteredAndSortedTransactions.length === 0}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export CSV
+                </Button>
+              </div>
             </div>
           )}
 
@@ -699,6 +707,8 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          <AddTransferModal isOpen={isTransferModalOpen} onClose={() => setIsTransferModalOpen(false)} />
         </div>
       );
     };

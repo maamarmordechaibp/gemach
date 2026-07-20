@@ -33,7 +33,7 @@ const LoansDashboard = () => {
 
     const activeLoans = loans.filter(l => l.status === 'active' || l.status === 'overdue');
 
-    const totalOut = activeLoans.reduce((sum, loan) => sum + parseFloat(loan.amount), 0);
+    const totalOut = activeLoans.reduce((sum, loan) => sum + (loan.remaining_balance != null ? parseFloat(loan.remaining_balance) : parseFloat(loan.amount || 0)), 0);
     const overdueCount = loans.filter(l => isLoanOverdue(l)).length;
     const dueNextWeek = activeLoans.filter(l => {
       const dueDate = new Date(l.due_date);

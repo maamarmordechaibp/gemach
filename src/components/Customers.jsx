@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
     import { motion, AnimatePresence } from 'framer-motion';
-    import { Plus, Search, Edit, Trash2, User, ArrowRight, Banknote, Users, ChevronDown, ChevronRight, Download, Loader2 } from 'lucide-react';
+    import { Plus, Search, Edit, Trash2, User, ArrowRight, Banknote, Users, ChevronDown, ChevronRight, Download, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
     import { Button } from '@/components/ui/button';
     import { toast } from '@/components/ui/use-toast';
     import CustomerModal from '@/components/CustomerModal';
@@ -8,9 +8,12 @@ import React, { useState, useMemo } from 'react';
     import { supabase } from '@/lib/customSupabaseClient';
     import { useNavigate } from 'react-router-dom';
 
+    const fmtMoney = (n) => parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
     const CustomerRow = ({ customer, level = 0, expandedRows, toggleRow, onSelect, onEdit, onDelete }) => {
       const isExpanded = expandedRows[customer.id];
       const hasSubAccounts = customer.sub_accounts && customer.sub_accounts.length > 0;
+      const totalLoans = parseFloat(customer.total_loans || 0);
       
       return (
         <>
@@ -49,6 +52,11 @@ import React, { useState, useMemo } from 'react';
                 ${parseFloat(customer.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </td>
+            <td className="px-6 py-4">
+              <span className={`font-medium ${totalLoans > 0 ? 'text-orange-400' : 'text-muted-foreground'}`}>
+                ${fmtMoney(totalLoans)}
+              </span>
+            </td>
             <td className="px-6 py-4 text-right">
               <div className="flex items-center justify-end space-x-2">
                 <Button variant="ghost" size="sm" onClick={() => onSelect(customer.id)} className="text-muted-foreground hover:text-foreground"><ArrowRight className="h-4 w-4" /></Button>
@@ -76,12 +84,26 @@ import React, { useState, useMemo } from 'react';
     };
 
     const Customers = () => {
-        const { customers, loading, refreshData } = useData();
+        const { customers, loans, loading, refreshData } = useData();
         const navigate = useNavigate();
         const [searchTerm, setSearchTerm] = useState('');
         const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
         const [editingCustomer, setEditingCustomer] = useState(null);
         const [expandedRows, setExpandedRows] = useState({});
+        const [sort, setSort] = useState({ key: 'account_number', order: 'asc' });
+
+        // Total outstanding loan amount per customer (loans that are not fully paid).
+        const loanTotalsByCustomer = useMemo(() => {
+            const map = {};
+            (loans || []).forEach(loan => {
+                if (loan.status === 'paid') return;
+                const remaining = loan.remaining_balance != null
+                    ? parseFloat(loan.remaining_balance)
+                    : parseFloat(loan.amount || 0);
+                map[loan.customer_id] = (map[loan.customer_id] || 0) + (remaining > 0 ? remaining : 0);
+            });
+            return map;
+        }, [loans]);
 
         const handleAddCustomer = () => {
             setEditingCustomer(null);
@@ -130,23 +152,23 @@ import React, { useState, useMemo } from 'react';
 
         const customersWithSubAccounts = useMemo(() => {
             if (!customers || customers.length === 0) return [];
-            const customerMap = new Map(customers.map(c => [c.account_number, { ...c, sub_accounts: [] }]));
+            const customerMap = new Map(customers.map(c => [c.account_number, { ...c, total_loans: loanTotalsByCustomer[c.id] || 0, sub_accounts: [] }]));
             
             customers.forEach(c => {
                 if (c.parent_account_id && customerMap.has(c.parent_account_id)) {
                     const parent = customerMap.get(c.parent_account_id);
                     if (parent) {
-                      parent.sub_accounts.push(c);
+                      parent.sub_accounts.push(customerMap.get(c.account_number) || { ...c, total_loans: loanTotalsByCustomer[c.id] || 0 });
                     }
                 }
             });
             return Array.from(customerMap.values()).filter(c => !c.parent_account_id);
-        }, [customers]);
+        }, [customers, loanTotalsByCustomer]);
 
         const filteredCustomers = useMemo(() => {
             if (!customersWithSubAccounts) return [];
             const searchLower = searchTerm.toLowerCase();
-            return customersWithSubAccounts.filter(customer =>
+            const matches = customersWithSubAccounts.filter(customer =>
                 (customer.first_name?.toLowerCase() || '').includes(searchLower) ||
                 (customer.last_name?.toLowerCase() || '').includes(searchLower) ||
                 (customer.account_number?.toString().toLowerCase() || '').includes(searchLower) ||
@@ -157,7 +179,69 @@ import React, { useState, useMemo } from 'react';
                     (sub.account_number?.toString().toLowerCase() || '').includes(searchLower)
                 ))
             );
-        }, [customersWithSubAccounts, searchTerm]);
+
+            const compare = (a, b) => {
+                let valA;
+                let valB;
+                switch (sort.key) {
+                    case 'name':
+                        valA = `${a.first_name || ''} ${a.last_name || ''}`.toLowerCase();
+                        valB = `${b.first_name || ''} ${b.last_name || ''}`.toLowerCase();
+                        break;
+                    case 'balance':
+                        valA = parseFloat(a.balance) || 0;
+                        valB = parseFloat(b.balance) || 0;
+                        break;
+                    case 'total_loans':
+                        valA = parseFloat(a.total_loans) || 0;
+                        valB = parseFloat(b.total_loans) || 0;
+                        break;
+                    case 'account_number':
+                    default: {
+                        // Numeric-aware comparison so account numbers order naturally.
+                        const numA = parseFloat(String(a.account_number).replace(/[^0-9.]/g, ''));
+                        const numB = parseFloat(String(b.account_number).replace(/[^0-9.]/g, ''));
+                        if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+                            valA = numA; valB = numB;
+                        } else {
+                            valA = String(a.account_number || ''); valB = String(b.account_number || '');
+                        }
+                        break;
+                    }
+                }
+                if (valA < valB) return sort.order === 'asc' ? -1 : 1;
+                if (valA > valB) return sort.order === 'asc' ? 1 : -1;
+                return 0;
+            };
+
+            const sorted = [...matches].sort(compare);
+            sorted.forEach(c => {
+                if (c.sub_accounts && c.sub_accounts.length > 0) {
+                    c.sub_accounts = [...c.sub_accounts].sort(compare);
+                }
+            });
+            return sorted;
+        }, [customersWithSubAccounts, searchTerm, sort]);
+
+        const handleSort = (key) => {
+            setSort(prev => ({
+                key,
+                order: prev.key === key && prev.order === 'asc' ? 'desc' : 'asc'
+            }));
+        };
+
+        const SortHeader = ({ label, sortKey, align = 'left' }) => (
+            <th className={`px-6 py-4 text-${align} text-sm font-medium text-muted-foreground`}>
+                <button
+                    type="button"
+                    onClick={() => handleSort(sortKey)}
+                    className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${align === 'right' ? 'flex-row-reverse' : ''}`}
+                >
+                    {label}
+                    {sort.key === sortKey && (sort.order === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />)}
+                </button>
+            </th>
+        );
 
         const toggleRow = (id) => {
             setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
@@ -241,10 +325,11 @@ import React, { useState, useMemo } from 'react';
                                 <table className="w-full">
                                     <thead className="bg-secondary/50">
                                         <tr>
-                                            <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Account #</th>
-                                            <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Name</th>
+                                            <SortHeader label="Account #" sortKey="account_number" />
+                                            <SortHeader label="Name" sortKey="name" />
                                             <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Phone</th>
-                                            <th className="px-6 py-4 text-left text-sm font-medium text-muted-foreground">Balance</th>
+                                            <SortHeader label="Balance" sortKey="balance" />
+                                            <SortHeader label="Total Loans" sortKey="total_loans" />
                                             <th className="px-6 py-4 text-right text-sm font-medium text-muted-foreground">Actions</th>
                                         </tr>
                                     </thead>

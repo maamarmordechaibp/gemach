@@ -20,6 +20,8 @@
                 debitChecks: [],
                 creditCash: '',
                 creditChecks: [],
+                creditNote: '',
+                debitNote: '',
                 applyFee: true,
                 transferDetails: {
                     toAccount: '',
@@ -71,6 +73,8 @@
                 debitChecks: [],
                 creditCash: '',
                 creditChecks: [],
+                creditNote: '',
+                debitNote: '',
                 applyFee: true,
                 transferDetails: {
                     toAccount: '',
@@ -138,7 +142,9 @@
                 p_transfer_to_account: transactionState.transferDetails.toAccount || null,
                 p_apply_fee: transactionState.applyFee,
                 p_loan_to_create: loanToCreate,
-                p_loan_to_repay: loanToRepay
+                p_loan_to_repay: loanToRepay,
+                p_credit_memo: (transactionState.creditNote || '').trim() || null,
+                p_debit_memo: (transactionState.debitNote || '').trim() || null
             });
 
             if (error) throw error;

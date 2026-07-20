@@ -14,16 +14,18 @@ import { Coins } from 'lucide-react';
 
 const fmt = (n) => parseFloat(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const loanRemaining = (l) => (l && l.remaining_balance != null ? parseFloat(l.remaining_balance) : parseFloat(l?.amount || 0));
+
 const RepaymentDialog = ({ isOpen, onClose, onConfirm, loans, totalCredit }) => {
   // All outstanding loans for this customer, oldest due date first.
   const loanList = useMemo(() => {
     return (loans || [])
-      .filter(l => parseFloat(l.amount) > 0 && l.status !== 'paid')
+      .filter(l => loanRemaining(l) > 0 && l.status !== 'paid')
       .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
   }, [loans]);
 
   const totalOwed = useMemo(
-    () => loanList.reduce((s, l) => s + parseFloat(l.amount || 0), 0),
+    () => loanList.reduce((s, l) => s + loanRemaining(l), 0),
     [loanList]
   );
 
@@ -48,7 +50,7 @@ const RepaymentDialog = ({ isOpen, onClose, onConfirm, loans, totalCredit }) => 
   // Allocate the amount across loans, oldest first, for the preview.
   let remaining = cappedAmount;
   const allocations = loanList.map(l => {
-    const amt = parseFloat(l.amount);
+    const amt = loanRemaining(l);
     const alloc = Math.min(remaining, amt);
     remaining = Math.max(0, remaining - alloc);
     return { loan: l, alloc };
@@ -69,7 +71,7 @@ const RepaymentDialog = ({ isOpen, onClose, onConfirm, loans, totalCredit }) => 
             <div key={loan.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
               <span className="text-muted-foreground">Due {loan.due_date ? new Date(loan.due_date).toLocaleDateString() : '—'}</span>
               <div className="flex items-center gap-3">
-                <span className="font-medium">${fmt(loan.amount)}</span>
+                <span className="font-medium">${fmt(loanRemaining(loan))}</span>
                 {alloc > 0.001 && <span className="text-green-500 text-xs">-${fmt(alloc)}</span>}
               </div>
             </div>
