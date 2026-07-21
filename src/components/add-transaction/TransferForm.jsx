@@ -2,24 +2,17 @@ import React, { useState, useMemo } from 'react';
 import { useData } from '@/contexts/DataContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search } from 'lucide-react';
+import { Search, Plus, Trash2 } from 'lucide-react';
 
-const TransferForm = ({ transactionState, setTransactionState }) => {
-    const { customers } = useData();
+const emptyTransfer = () => ({ toAccount: '', amount: '' });
+
+const TransferRow = ({ index, transfer, customers, canRemove, onChange, onRemove }) => {
     const [recipientSearchTerm, setRecipientSearchTerm] = useState('');
-    const [selectedRecipient, setSelectedRecipient] = useState(null);
 
-    const transferDetails = transactionState?.transferDetails || {};
-
-    const setTransferDetails = (newDetails) => {
-        setTransactionState(prev => ({
-            ...prev,
-            transferDetails: {
-                ...prev.transferDetails,
-                ...newDetails
-            }
-        }));
-    };
+    const selectedRecipient = useMemo(() => {
+        if (!transfer.toAccount) return null;
+        return customers.find(c => c.account_number === transfer.toAccount) || null;
+    }, [transfer.toAccount, customers]);
 
     const recipientSearchResults = useMemo(() => {
         if (!recipientSearchTerm) return [];
@@ -31,26 +24,35 @@ const TransferForm = ({ transactionState, setTransactionState }) => {
     }, [recipientSearchTerm, customers]);
 
     const handleSelectRecipient = (customer) => {
-        setSelectedRecipient(customer);
-        setTransferDetails({ toAccount: customer.account_number });
+        onChange(index, { toAccount: customer.account_number });
         setRecipientSearchTerm('');
     };
-    
-    const clearRecipient = () => {
-        setSelectedRecipient(null);
-        setTransferDetails({ toAccount: '' });
-    };
+
+    const clearRecipient = () => onChange(index, { toAccount: '' });
 
     return (
-        <div className="space-y-2">
+        <div className="relative space-y-2 rounded-lg border border-border p-3">
+            {canRemove && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onRemove(index)}
+                    className="absolute right-2 top-2 h-7 w-7 text-muted-foreground hover:text-destructive"
+                    aria-label="Remove transfer"
+                >
+                    <Trash2 className="h-4 w-4" />
+                </Button>
+            )}
+
             <div>
                 <label className="text-sm font-medium text-muted-foreground">Amount</label>
-                <Input 
-                    type="number" 
-                    placeholder="Transfer Amount" 
-                    value={transferDetails.amount || ''} 
-                    onChange={(e) => setTransferDetails({ amount: e.target.value })} 
-                    className="w-full max-w-xs bg-input border border-border rounded-lg p-2 text-foreground mt-1" 
+                <Input
+                    type="number"
+                    placeholder="Transfer Amount"
+                    value={transfer.amount || ''}
+                    onChange={(e) => onChange(index, { amount: e.target.value })}
+                    className="w-full max-w-xs bg-input border border-border rounded-lg p-2 text-foreground mt-1"
                 />
             </div>
 
@@ -91,6 +93,61 @@ const TransferForm = ({ transactionState, setTransactionState }) => {
                     </div>
                 )}
             </div>
+        </div>
+    );
+};
+
+const TransferForm = ({ transactionState, setTransactionState }) => {
+    const { customers } = useData();
+
+    const transfers = transactionState?.transferDetails?.transfers || [];
+
+    const updateTransfers = (nextTransfers) => {
+        setTransactionState(prev => ({
+            ...prev,
+            transferDetails: {
+                ...prev.transferDetails,
+                transfers: nextTransfers
+            }
+        }));
+    };
+
+    const handleRowChange = (index, newValues) => {
+        updateTransfers(transfers.map((t, i) => (i === index ? { ...t, ...newValues } : t)));
+    };
+
+    const handleAddTransfer = () => {
+        updateTransfers([...transfers, emptyTransfer()]);
+    };
+
+    const handleRemoveTransfer = (index) => {
+        const next = transfers.filter((_, i) => i !== index);
+        updateTransfers(next.length ? next : [emptyTransfer()]);
+    };
+
+    return (
+        <div className="space-y-3">
+            {transfers.map((transfer, index) => (
+                <TransferRow
+                    key={index}
+                    index={index}
+                    transfer={transfer}
+                    customers={customers}
+                    canRemove={transfers.length > 1}
+                    onChange={handleRowChange}
+                    onRemove={handleRemoveTransfer}
+                />
+            ))}
+
+            <Button
+                type="button"
+                variant="outline"
+                onClick={handleAddTransfer}
+                className="w-full sm:w-auto"
+            >
+                <Plus className="h-4 w-4 mr-2" />
+                Add another transfer
+            </Button>
         </div>
     );
 };

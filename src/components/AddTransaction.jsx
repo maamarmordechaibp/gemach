@@ -76,13 +76,14 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
     transactionFee,
     totalDebit,
     totalCredit,
+    totalTransfer,
     handleSubmit,
     resetState,
     isProcessing,
   } = useTransactionLogic(selectedCustomer, () => {
     if (selectedCustomer) {
       const fee = transactionState?.applyFee ? transactionFee : 0;
-      const transferAmt = parseFloat(transactionState?.transferDetails?.amount) || 0;
+      const transferAmt = totalTransfer;
       const newBalance = (parseFloat(selectedCustomer.balance) || 0) + totalCredit - totalDebit - fee - transferAmt;
       printReceipt(
         `${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
@@ -108,11 +109,16 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
     return loans.filter(l => allAccountIds.includes(l.customer_id) && l.status !== 'paid');
   }, [selectedCustomer, customers, loans]);
 
+  const singleTransfer = useMemo(() => {
+    const transfers = (transactionState?.transferDetails?.transfers || []).filter(t => (parseFloat(t.amount) || 0) > 0 && t.toAccount);
+    return transfers.length === 1 ? transfers[0] : null;
+  }, [transactionState?.transferDetails?.transfers]);
+
   const recipientCustomer = useMemo(() => {
-    const toAccount = transactionState?.transferDetails?.toAccount;
+    const toAccount = singleTransfer?.toAccount;
     if (!toAccount) return null;
     return (customers || []).find(c => c.account_number === toAccount) || null;
-  }, [transactionState?.transferDetails?.toAccount, customers]);
+  }, [singleTransfer, customers]);
 
   const recipientLoans = useMemo(() => {
     if (!recipientCustomer || !loans) return [];
@@ -128,20 +134,26 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
   const handleProcessTransaction = async (e) => {
     e.preventDefault();
     if (!selectedCustomer || !transactionState) { toast({ title: "No Customer Selected", variant: "destructive" }); return; }
-    if (totalCredit <= 0 && totalDebit <= 0 && (parseFloat(transactionState.transferDetails?.amount) || 0) <= 0) { toast({ title: "Empty Transaction", variant: "destructive" }); return; }
+    if (totalCredit <= 0 && totalDebit <= 0 && totalTransfer <= 0) { toast({ title: "Empty Transaction", variant: "destructive" }); return; }
 
-    if ((parseFloat(transactionState.transferDetails?.amount) || 0) > 0) {
-      if (!transactionState.transferDetails.toAccount) {
-        toast({ title: "Recipient required", description: "Please select a recipient for the transfer.", variant: "destructive" });
+    const transfers = (transactionState.transferDetails?.transfers || []).filter(t => (parseFloat(t.amount) || 0) > 0 || t.toAccount);
+    for (const t of transfers) {
+      const amt = parseFloat(t.amount) || 0;
+      if (amt > 0 && !t.toAccount) {
+        toast({ title: "Recipient required", description: "Please select a recipient for each transfer.", variant: "destructive" });
         return;
       }
-      if (transactionState.transferDetails.toAccount === selectedCustomer.account_number) {
+      if (t.toAccount && amt <= 0) {
+        toast({ title: "Amount required", description: "Please enter an amount for each transfer.", variant: "destructive" });
+        return;
+      }
+      if (t.toAccount === selectedCustomer.account_number) {
         toast({ title: "Invalid Transfer", description: "Cannot transfer to the same account.", variant: "destructive" });
         return;
       }
     }
 
-    const netDebit = totalDebit + (transactionState?.applyFee ? transactionFee : 0) + (parseFloat(transactionState.transferDetails?.amount) || 0);
+    const netDebit = totalDebit + (transactionState?.applyFee ? transactionFee : 0) + totalTransfer;
     const prospectiveBalance = (parseFloat(selectedCustomer.balance) || 0) + totalCredit - netDebit;
 
     if (prospectiveBalance < 0) {
@@ -165,7 +177,7 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
       return;
     }
 
-    const transferAmount = parseFloat(transactionState.transferDetails?.amount) || 0;
+    const transferAmount = parseFloat(singleTransfer?.amount) || 0;
     if (transferAmount > 0 && recipientCustomer && recipientLoans.length > 0) {
       setRepaymentPrompt({ show: true, loans: recipientLoans, recipient: recipientCustomer, isTransfer: true, amount: transferAmount });
       return;

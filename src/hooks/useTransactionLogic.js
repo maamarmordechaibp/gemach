@@ -24,9 +24,8 @@
                 debitNote: '',
                 applyFee: true,
                 transferDetails: {
-                    toAccount: '',
                     fromAccount: selectedCustomer.account_number,
-                    amount: '',
+                    transfers: [{ toAccount: '', amount: '' }],
                     isLoanPayment: false,
                     loanId: null
                 },
@@ -66,6 +65,14 @@
         return cash + checks;
       }, [transactionState]);
 
+      const totalTransfer = useMemo(() => {
+        if (!transactionState) return 0;
+        return (transactionState.transferDetails?.transfers || []).reduce(
+          (sum, t) => sum + (parseFloat(t.amount) || 0),
+          0,
+        );
+      }, [transactionState]);
+
       const resetState = useCallback(() => {
         if (selectedCustomer) {
             setTransactionState({
@@ -77,9 +84,8 @@
                 debitNote: '',
                 applyFee: true,
                 transferDetails: {
-                    toAccount: '',
                     fromAccount: selectedCustomer.account_number,
-                    amount: '',
+                    transfers: [{ toAccount: '', amount: '' }],
                     isLoanPayment: false,
                     loanId: null
                 },
@@ -130,6 +136,12 @@
             isRush: c.isRush || false
         }));
 
+        // Each transaction can include multiple transfers to different accounts.
+        // The stored procedure reads keys `toaccount` and `amount` per entry.
+        const transfersPayload = (transactionState.transferDetails?.transfers || [])
+            .filter(t => t.toAccount && (parseFloat(t.amount) || 0) > 0)
+            .map(t => ({ toaccount: t.toAccount, amount: parseFloat(t.amount) }));
+
         try {
             const { data, error } = await supabase.rpc('process_transaction_v2', {
                 p_customer_id: selectedCustomer.id,
@@ -138,13 +150,14 @@
                 p_credit_checks: creditChecksPayload,
                 p_debit_cash_entries: validatedDebitCashEntries,
                 p_debit_checks: debitChecksPayload,
-                p_transfer_amount: parseFloat(transactionState.transferDetails.amount) || 0,
-                p_transfer_to_account: transactionState.transferDetails.toAccount || null,
+                p_transfer_amount: 0,
+                p_transfer_to_account: null,
                 p_apply_fee: transactionState.applyFee,
                 p_loan_to_create: loanToCreate,
                 p_loan_to_repay: loanToRepay,
                 p_credit_memo: (transactionState.creditNote || '').trim() || null,
-                p_debit_memo: (transactionState.debitNote || '').trim() || null
+                p_debit_memo: (transactionState.debitNote || '').trim() || null,
+                p_transfers: transfersPayload
             });
 
             if (error) throw error;
@@ -180,6 +193,7 @@
         feeMemo,
         totalDebit,
         totalCredit,
+        totalTransfer,
         handleSubmit,
         resetState,
         isProcessing,

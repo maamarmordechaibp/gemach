@@ -9,6 +9,7 @@
 --   9. process_transfer() stored procedure (validated account-to-account transfer)
 --  10. pay_loan_from_account() stored procedure (pay a loan from account balance)
 --  11. Optional notes on deposits & withdrawals (process_transaction_v2 memos)
+--  12. Multiple transfers per transaction (process_transaction_v2 p_transfers)
 --
 -- Safe to run multiple times (idempotent guards where practical).
 -- ============================================================================
@@ -248,7 +249,8 @@ CREATE OR REPLACE FUNCTION public.process_transaction_v2(
     p_loan_to_create jsonb DEFAULT NULL::jsonb,
     p_loan_to_repay jsonb DEFAULT NULL::jsonb,
     p_credit_memo text DEFAULT NULL::text,
-    p_debit_memo text DEFAULT NULL::text
+    p_debit_memo text DEFAULT NULL::text,
+    p_transfers jsonb DEFAULT NULL::jsonb
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -264,6 +266,7 @@ AS $$
         v_credit_check record;
         v_debit_check record;
         v_cash_debit_entry record;
+        v_transfer record;
         v_new_loan_id uuid;
         v_target_customer_id uuid;
         v_fee_memo text;
@@ -294,7 +297,26 @@ AS $$
             WHERE id = (p_loan_to_repay->>'id')::uuid;
         END IF;
 
-        IF p_transfer_amount > 0 AND p_transfer_to_account IS NOT NULL THEN
+        IF p_transfers IS NOT NULL AND jsonb_array_length(p_transfers) > 0 THEN
+            -- Multiple transfers: an array of { toaccount, amount } objects.
+            FOR v_transfer IN SELECT * FROM jsonb_to_recordset(p_transfers) AS x(toaccount text, amount numeric) LOOP
+                IF v_transfer.amount IS NULL OR v_transfer.amount <= 0 OR NULLIF(trim(COALESCE(v_transfer.toaccount, '')), '') IS NULL THEN
+                    CONTINUE;
+                END IF;
+
+                SELECT id INTO v_target_customer_id FROM customers WHERE account_number = v_transfer.toaccount;
+                IF v_target_customer_id IS NULL THEN RAISE EXCEPTION 'Recipient account % not found', v_transfer.toaccount; END IF;
+
+                v_transfer_tx_id_from := 'XFER-OUT-' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISSMS') || '-' || (random()*1000000)::int::text;
+                INSERT INTO transactions (id, account_number, type, amount, date, status, memo) VALUES (v_transfer_tx_id_from, p_account_number, 'debit', v_transfer.amount, now(), 'completed', 'Transfer to ' || v_transfer.toaccount);
+                v_transaction_ids := array_append(v_transaction_ids, v_transfer_tx_id_from);
+                v_balance_change := v_balance_change - v_transfer.amount;
+
+                v_transfer_tx_id_to := 'XFER-IN-' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISSMS') || '-' || (random()*1000000)::int::text;
+                INSERT INTO transactions (id, account_number, type, amount, date, status, memo) VALUES (v_transfer_tx_id_to, v_transfer.toaccount, 'credit', v_transfer.amount, now(), 'completed', 'Transfer from ' || p_account_number);
+                UPDATE customers SET balance = balance + v_transfer.amount WHERE id = v_target_customer_id;
+            END LOOP;
+        ELSIF p_transfer_amount > 0 AND p_transfer_to_account IS NOT NULL THEN
             SELECT id INTO v_target_customer_id FROM customers WHERE account_number = p_transfer_to_account;
             IF v_target_customer_id IS NULL THEN RAISE EXCEPTION 'Recipient account not found'; END IF;
 
