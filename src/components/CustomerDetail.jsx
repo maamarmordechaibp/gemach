@@ -174,21 +174,30 @@
                 customerTransactions = customerTransactions.filter(t => t.type === filters.type);
             }
 
+            // Canonical chronological order, identical to the order used to build
+            // `balanceMap` (date asc, then id asc). Keeping the displayed rows in this
+            // exact order (or its reverse) guarantees the running "Balance" column reads
+            // as a proper ledger even when many transactions share the same day/timestamp.
+            const canonicalCompare = (a, b) =>
+                (new Date(a.date).getTime() - new Date(b.date).getTime())
+                || String(a.id).localeCompare(String(b.id));
+
             customerTransactions.sort((a, b) => {
-                let valA = a[sort.key];
-                let valB = b[sort.key];
-                if (sort.key === 'amount') {
-                    valA = parseFloat(valA);
-                    valB = parseFloat(valB);
-                }
                 if (sort.key === 'date') {
-                    valA = new Date(valA).getTime();
-                    valB = new Date(valB).getTime();
+                    // Reverse of canonical when descending so balances step down correctly.
+                    return sort.order === 'asc' ? canonicalCompare(a, b) : -canonicalCompare(a, b);
                 }
-                
+                if (sort.key === 'amount') {
+                    const diff = parseFloat(a.amount) - parseFloat(b.amount);
+                    if (diff !== 0) return sort.order === 'asc' ? diff : -diff;
+                    return canonicalCompare(a, b); // stable, deterministic tiebreak
+                }
+
+                const valA = a[sort.key];
+                const valB = b[sort.key];
                 if (valA < valB) return sort.order === 'asc' ? -1 : 1;
                 if (valA > valB) return sort.order === 'asc' ? 1 : -1;
-                return 0;
+                return canonicalCompare(a, b);
             });
 
             return customerTransactions;
