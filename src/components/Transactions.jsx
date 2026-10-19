@@ -18,8 +18,12 @@ import {
   ArrowUp,
   ArrowDown,
   FileText,
-  Download
+  Download,
+  Printer,
+  Wallet,
+  Coins
 } from 'lucide-react';
+import { transactionGroupFor, reprintReceipt } from '@/lib/transactionReceipt';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/use-toast';
@@ -66,7 +70,7 @@ const signedEffect = (tx) => {
   return -amt;
 };
 
-const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) => {
+const TransactionsList = ({ transactions, customers, onVoid, onReprint, runningBalances }) => {
       const getCustomerName = (accountNumber) => {
         const customer = customers.find(c => c.account_number === accountNumber);
         return customer ? `${customer.first_name} ${customer.last_name}` : 'Unknown Customer';
@@ -166,11 +170,18 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                     </Badge>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    {tx.status !== 'voided' && (
-                      <Button variant="destructive" size="sm" onClick={() => onVoid(tx)} title="Void Transaction">
-                        <RotateCcw className="h-4 w-4" />
-                      </Button>
-                    )}
+                    <div className="flex justify-end gap-2">
+                      {onReprint && (
+                        <Button variant="outline" size="sm" onClick={() => onReprint(tx)} title="Reprint Receipt">
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {tx.status !== 'voided' && (
+                        <Button variant="destructive" size="sm" onClick={() => onVoid(tx)} title="Void Transaction">
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </motion.tr>
               )
@@ -180,7 +191,7 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
     };
 
     const Transactions = ({ transactions: initialTransactions, customers: initialCustomers, runningBalances }) => {
-      const { transactions: allTransactions, customers: allCustomers, refreshData } = useData();
+      const { transactions: allTransactions, customers: allCustomers, refreshData, checksIn, checksOut, settings, loans } = useData();
       const [voidingTransaction, setVoidingTransaction] = useState(null);
       const [searchTerm, setSearchTerm] = useState('');
       const [typeFilter, setTypeFilter] = useState('all');
@@ -222,6 +233,14 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
       }, [transactions, customers]);
 
       const effectiveRunningBalances = runningBalances || computedRunningBalances;
+
+      // Reprint the full receipt for the transaction this row belongs to.
+      const handleReprint = (tx) => {
+        const group = transactionGroupFor(tx, transactions);
+        const last = [...group].sort((a, b) => String(a.id).localeCompare(String(b.id))).pop();
+        const balanceAfter = last && effectiveRunningBalances ? (effectiveRunningBalances[last.id] ?? null) : null;
+        reprintReceipt(tx, { allTransactions: transactions, customers, checksIn, checksOut, settings, balanceAfter });
+      };
 
       // Filter and sort transactions
       const filteredAndSortedTransactions = useMemo(() => {
@@ -318,6 +337,33 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
         return stats;
       }, [filteredAndSortedTransactions]);
 
+      // What the gemach actually holds for members (sum of account balances) and
+      // what is owed to it (open loans). Scoped to the accounts on this page when
+      // showing a single customer's transactions.
+      const holdings = useMemo(() => {
+        const scopeAccounts = initialTransactions
+          ? new Set((transactions || []).map(t => t.account_number))
+          : null;
+        const inScope = (acct) => acct !== 'FEES' && (!scopeAccounts || scopeAccounts.has(acct));
+        let positive = 0;
+        let overdrawn = 0;
+        const scopedCustomerIds = new Set();
+        for (const c of allCustomers || []) {
+          if (!inScope(c.account_number)) continue;
+          scopedCustomerIds.add(c.id);
+          const b = parseFloat(c.balance) || 0;
+          if (b >= 0) positive += b; else overdrawn += -b;
+        }
+        let loansOutstanding = 0;
+        let loanCount = 0;
+        for (const l of loans || []) {
+          if (l.status === 'paid' || !scopedCustomerIds.has(l.customer_id)) continue;
+          const remaining = l.remaining_balance != null ? parseFloat(l.remaining_balance) : parseFloat(l.amount || 0);
+          if (remaining > 0) { loansOutstanding += remaining; loanCount++; }
+        }
+        return { positive, overdrawn, net: positive - overdrawn, loansOutstanding, loanCount };
+      }, [allCustomers, loans, transactions, initialTransactions]);
+
       const handleSort = (field) => {
         if (sortBy === field) {
           setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -411,7 +457,7 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
           )}
 
           {/* Summary Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
@@ -461,15 +507,31 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Net Amount</p>
-                    <p className={`text-2xl font-bold ${summaryStats.netAmount >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                      ${Math.abs(summaryStats.netAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    <p className="text-sm text-muted-foreground">Money Members Hold With Us</p>
+                    <p className={`text-2xl font-bold ${holdings.net >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-red-700 dark:text-red-400'}`}>
+                      {holdings.net < 0 ? '-' : ''}${Math.abs(holdings.net).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {filteredAndSortedTransactions.length} total transactions
+                      ${holdings.positive.toLocaleString(undefined, { minimumFractionDigits: 2 })} in accounts
+                      {holdings.overdrawn > 0 && <> · ${holdings.overdrawn.toLocaleString(undefined, { minimumFractionDigits: 2 })} overdrawn</>}
                     </p>
                   </div>
-                  <FileText className="h-8 w-8 text-blue-700 dark:text-blue-400" />
+                  <Wallet className="h-8 w-8 text-blue-700 dark:text-blue-400" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Loans Outstanding</p>
+                    <p className="text-2xl font-bold text-orange-700 dark:text-orange-400">
+                      ${holdings.loansOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{holdings.loanCount} open loan{holdings.loanCount === 1 ? '' : 's'} · owed to us</p>
+                  </div>
+                  <Coins className="h-8 w-8 text-orange-700 dark:text-orange-400" />
                 </div>
               </CardContent>
             </Card>
@@ -646,7 +708,7 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700/50">
-                      <TransactionsList transactions={paginatedTransactions} customers={customers} onVoid={setVoidingTransaction} runningBalances={effectiveRunningBalances} />
+                      <TransactionsList transactions={paginatedTransactions} customers={customers} onVoid={setVoidingTransaction} onReprint={handleReprint} runningBalances={effectiveRunningBalances} />
                     </tbody>
                   </table>
                 </div>

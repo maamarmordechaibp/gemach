@@ -37,7 +37,16 @@
         } else {
             setTransactionState(null);
         }
-      }, [selectedCustomer, settings]);
+        // Only start a fresh form when a different customer is selected. Data
+        // refreshes (e.g. after a donation) produce a new `settings` object and
+        // must NOT wipe a transaction that is being entered.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [selectedCustomer?.id]);
+
+      // Keep fee settings current without resetting the form.
+      useEffect(() => {
+        setTransactionState(prev => (prev ? { ...prev, feeSettings: settings?.transaction_fees || {} } : prev));
+      }, [settings]);
 
       const { transactionFee, feeMemo, feeBreakdown } = useTransactionFees(
         transactionState?.feeSettings, 
@@ -158,6 +167,19 @@
             .filter(t => t.toAccount && (parseFloat(t.amount) || 0) > 0);
         const transfersPayload = validatedTransfers
             .map(t => ({ toaccount: t.toAccount, amount: parseFloat(t.amount), note: (t.note || '').toString().trim() }));
+
+        const hasWork = (parseFloat(transactionState.creditCash) || 0) > 0
+            || creditChecksPayload.length > 0
+            || creditOtherPayload.length > 0
+            || validatedDebitCashEntries.length > 0
+            || debitChecksPayload.length > 0
+            || transfersPayload.length > 0
+            || !!loanToCreate;
+        if (!hasWork) {
+            toast({ title: "Empty Transaction", description: "Nothing to process — please re-enter the amounts.", variant: "destructive" });
+            setIsProcessing(false);
+            return { success: false, transactionIds: [] };
+        }
 
         try {
             const { data, error } = await supabase.rpc('process_transaction_v2', {

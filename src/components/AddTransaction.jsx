@@ -288,6 +288,17 @@ const AddTransaction = () => {
     const promptLoans = prompt.loans || [];
     setRepaymentPrompt({ show: false, loans: [], recipient: null, isTransfer: false, amount: 0 });
     const result = await handleSubmit();
+    // Only touch loans if the money really arrived: a transfer row (XFER-OUT) for a
+    // transfer, or a deposit row (CREDIT-*) for a deposit. Otherwise a loan could be
+    // marked paid without any money moving.
+    const createdIds = result?.transactionIds || [];
+    const moneyArrived = prompt.isTransfer
+      ? createdIds.some(id => id.startsWith('XFER-OUT-'))
+      : createdIds.some(id => id.startsWith('CREDIT-'));
+    if (result?.success && applyToLoan && !moneyArrived) {
+      toast({ title: "Loan not updated", description: "No transfer or deposit was recorded, so nothing was applied to the loan.", variant: "destructive" });
+      return;
+    }
     if (result?.success && applyToLoan && promptLoans.length && applyAmount > 0) {
       const sorted = promptLoans
         .filter(l => loanRemaining(l) > 0 && l.status !== 'paid')
