@@ -20,12 +20,14 @@
                 debitChecks: [],
                 creditCash: '',
                 creditChecks: [],
+                creditOther: [],
                 creditNote: '',
                 debitNote: '',
                 applyFee: true,
+                waivedFees: [],
                 transferDetails: {
                     fromAccount: selectedCustomer.account_number,
-                    transfers: [{ toAccount: '', amount: '' }],
+                    transfers: [{ toAccount: '', amount: '', note: '' }],
                     isLoanPayment: false,
                     loanId: null
                 },
@@ -37,7 +39,7 @@
         }
       }, [selectedCustomer, settings]);
 
-      const { transactionFee, feeMemo } = useTransactionFees(
+      const { transactionFee, feeMemo, feeBreakdown } = useTransactionFees(
         transactionState?.feeSettings, 
         transactionState
       );
@@ -62,7 +64,11 @@
           (sum, check) => sum + (parseFloat(check.amount) || 0),
           0,
         );
-        return cash + checks;
+        const other = (transactionState.creditOther || []).reduce(
+          (sum, entry) => sum + (parseFloat(entry.amount) || 0),
+          0,
+        );
+        return cash + checks + other;
       }, [transactionState]);
 
       const totalTransfer = useMemo(() => {
@@ -80,12 +86,14 @@
                 debitChecks: [],
                 creditCash: '',
                 creditChecks: [],
+                creditOther: [],
                 creditNote: '',
                 debitNote: '',
                 applyFee: true,
+                waivedFees: [],
                 transferDetails: {
                     fromAccount: selectedCustomer.account_number,
-                    transfers: [{ toAccount: '', amount: '' }],
+                    transfers: [{ toAccount: '', amount: '', note: '' }],
                     isLoanPayment: false,
                     loanId: null
                 },
@@ -129,6 +137,13 @@
             holdtags: Array.isArray(c.holdTags) ? c.holdTags : []
         }));
 
+        // QuickPay / Direct Deposit / Other deposits, each recorded with its own type.
+        const creditOtherPayload = filterEmptyAndValidate(transactionState.creditOther).map(e => ({
+            method: e.method || 'other',
+            amount: parseFloat(e.amount),
+            note: (e.note || '').toString().trim()
+        }));
+
         const debitChecksPayload = validatedDebitChecks.map(c => ({
             paytoorderof: (c.payToOrderOf || '').toString().trim(),
             amount: parseFloat(c.amount),
@@ -137,10 +152,12 @@
         }));
 
         // Each transaction can include multiple transfers to different accounts.
-        // The stored procedure reads keys `toaccount` and `amount` per entry.
-        const transfersPayload = (transactionState.transferDetails?.transfers || [])
-            .filter(t => t.toAccount && (parseFloat(t.amount) || 0) > 0)
-            .map(t => ({ toaccount: t.toAccount, amount: parseFloat(t.amount) }));
+        // The stored procedure reads keys `toaccount`, `amount` and `note` per entry;
+        // the note is recorded on both the sender's and the recipient's rows.
+        const validatedTransfers = (transactionState.transferDetails?.transfers || [])
+            .filter(t => t.toAccount && (parseFloat(t.amount) || 0) > 0);
+        const transfersPayload = validatedTransfers
+            .map(t => ({ toaccount: t.toAccount, amount: parseFloat(t.amount), note: (t.note || '').toString().trim() }));
 
         try {
             const { data, error } = await supabase.rpc('process_transaction_v2', {
@@ -157,10 +174,41 @@
                 p_loan_to_repay: loanToRepay,
                 p_credit_memo: (transactionState.creditNote || '').trim() || null,
                 p_debit_memo: (transactionState.debitNote || '').trim() || null,
-                p_transfers: transfersPayload
+                p_transfers: transfersPayload,
+                p_credit_other: creditOtherPayload,
+                p_waived_fees: transactionState.applyFee ? (transactionState.waivedFees || []) : []
             });
 
             if (error) throw error;
+
+            const transactionIds = (data && data.transaction_ids) || [];
+
+            // Outgoing check numbers are assigned by the DB; the IDs come back in
+            // submission order as DEBIT-CHECK-<timestamp>-<checkNumber>.
+            const assignedCheckNumbers = transactionIds
+                .filter(id => id.startsWith('DEBIT-CHECK-'))
+                .map(id => id.split('-').pop());
+
+            const appliedFee = transactionState.applyFee ? (parseFloat(transactionFee) || 0) : 0;
+            const receipt = {
+                customer: selectedCustomer,
+                creditCash: parseFloat(transactionState.creditCash) || 0,
+                creditChecks: creditChecksPayload,
+                creditOther: creditOtherPayload,
+                debitCash: validatedDebitCashEntries,
+                debitChecks: debitChecksPayload.map((c, i) => ({ ...c, checkNumber: assignedCheckNumbers[i] || null })),
+                transfers: validatedTransfers.map(t => ({
+                    toAccount: t.toAccount,
+                    amount: parseFloat(t.amount),
+                    note: (t.note || '').toString().trim(),
+                    recipient: (customers || []).find(c => c.account_number === t.toAccount) || null,
+                })),
+                feeBreakdown: transactionState.applyFee ? (feeBreakdown || []) : [],
+                fee: appliedFee,
+                loanAmount: loanToCreate ? (parseFloat(loanToCreate.amount) || 0) : 0,
+                creditNote: (transactionState.creditNote || '').trim(),
+                debitNote: (transactionState.debitNote || '').trim(),
+            };
 
             toast({ title: "Success", description: "Transaction completed successfully." });
 
@@ -169,9 +217,9 @@
                 refreshData();
             }, 800);
 
-            if (onSuccess) onSuccess();
+            if (onSuccess) onSuccess({ transactionIds, receipt });
 
-            return { success: true, transactionIds: (data && data.transaction_ids) || [] };
+            return { success: true, transactionIds };
 
         } catch (error) {
             toast({ title: "Transaction Failed", description: error.message, variant: "destructive" });
@@ -182,6 +230,9 @@
       }, [
         selectedCustomer, 
         transactionState,
+        transactionFee,
+        feeBreakdown,
+        customers,
         onSuccess, 
         refreshData
       ]);
@@ -191,6 +242,7 @@
         setTransactionState,
         transactionFee,
         feeMemo,
+        feeBreakdown,
         totalDebit,
         totalCredit,
         totalTransfer,

@@ -54,10 +54,11 @@ const getTransactionCategory = (tx) => {
 };
 
 // Signed effect a single transaction has on its account's balance.
+// A bounced deposit still counts: its "Bounced Check Reversal" debit offsets it.
 const signedEffect = (tx) => {
   if (tx.status === 'voided') return 0;
   const amt = parseFloat(tx.amount) || 0;
-  if (tx.type === 'credit' && tx.status !== 'bounced') return amt;
+  if (tx.type === 'credit') return amt;
   if (tx.type === 'transfer') {
     const memo = (tx.memo || '').toLowerCase();
     return memo.includes('from') ? amt : -amt;
@@ -74,10 +75,10 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
       const getStatusStyle = (status) => {
           switch (status) {
               case 'voided': return 'bg-slate-600 text-slate-200';
-              case 'bounced': return 'bg-red-500/20 text-red-400';
-              case 'on_hold': return 'bg-orange-500/20 text-orange-400';
-              case 'pending': return 'bg-yellow-500/20 text-yellow-400';
-              default: return 'bg-green-500/20 text-green-400';
+              case 'bounced': return 'bg-red-500/20 text-red-700 dark:text-red-400';
+              case 'on_hold': return 'bg-orange-500/20 text-orange-700 dark:text-orange-400';
+              case 'pending': return 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400';
+              default: return 'bg-green-500/20 text-green-700 dark:text-green-400';
           }
       };
       
@@ -90,10 +91,10 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
       };
       
       const getIconForType = (tx) => {
-        if (tx.memo && tx.memo.toLowerCase().includes('on hold')) return <Lock className="h-4 w-4 text-orange-400" />;
-        if (tx.type === 'credit') return <TrendingUp className="h-4 w-4 text-green-400" />;
-        if (tx.type === 'fee') return <DollarSign className="h-4 w-4 text-yellow-400" />;
-        return <TrendingDown className="h-4 w-4 text-red-400" />;
+        if (tx.memo && tx.memo.toLowerCase().includes('on hold')) return <Lock className="h-4 w-4 text-orange-700 dark:text-orange-400" />;
+        if (tx.type === 'credit') return <TrendingUp className="h-4 w-4 text-green-700 dark:text-green-400" />;
+        if (tx.type === 'fee') return <DollarSign className="h-4 w-4 text-yellow-700 dark:text-yellow-400" />;
+        return <TrendingDown className="h-4 w-4 text-red-700 dark:text-red-400" />;
       };
 
       const getTypeLabel = (tx) => {
@@ -107,7 +108,7 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
       return (
         <>
           {transactions.map((tx) => {
-              const isCredit = tx.type === 'credit' && tx.status !== 'bounced';
+              const isCredit = tx.type === 'credit';
               const isBounced = tx.status === 'bounced';
               const customer = customers.find(c => c.account_number === tx.account_number);
               
@@ -119,7 +120,7 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                   transition={{ duration: 0.3 }}
                   className={cn('hover:bg-slate-700/30 transition-colors', getRowStyle(tx.status))}
                 >
-                  <td className="px-6 py-4 text-slate-300">
+                  <td className="px-6 py-4 text-slate-800 dark:text-slate-300">
                     <div className="flex flex-col">
                       <span className="font-medium">{new Date(tx.date).toLocaleDateString()}</span>
                       <span className="text-xs text-muted-foreground">
@@ -137,20 +138,20 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
-                      <span className="font-medium text-white">{getCustomerName(tx.account_number)}</span>
+                      <span className="font-medium text-foreground">{getCustomerName(tx.account_number)}</span>
                       <span className="text-xs text-muted-foreground">{tx.account_number}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-slate-300">
+                  <td className="px-6 py-4 text-slate-800 dark:text-slate-300">
                     <div className="max-w-xs truncate" title={tx.memo}>
                       {tx.memo || 'No description'}
                     </div>
                   </td>
-                  <td className={cn('px-6 py-4 text-right font-bold text-lg', isCredit ? 'text-green-400' : 'text-red-400')}>
+                  <td className={cn('px-6 py-4 text-right font-bold text-lg', isCredit ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400')}>
                     {isCredit ? '+' : '-'}${parseFloat(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   {runningBalances && (
-                    <td className="px-6 py-4 text-right font-bold text-lg text-slate-200">
+                    <td className="px-6 py-4 text-right font-bold text-lg text-slate-900 dark:text-slate-200">
                       {runningBalances[tx.id] != null
                         ? `$${runningBalances[tx.id].toLocaleString(undefined, { minimumFractionDigits: 2 })}`
                         : '—'}
@@ -298,10 +299,10 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
       const summaryStats = useMemo(() => {
         const stats = filteredAndSortedTransactions.reduce((acc, tx) => {
           if (tx.status !== 'voided') {
-            if (tx.type === 'credit' && tx.status !== 'bounced') {
+            if (tx.type === 'credit') {
               acc.totalCredits += parseFloat(tx.amount);
               acc.creditCount++;
-            } else if (tx.type === 'debit' || tx.status === 'bounced') {
+            } else if (tx.type === 'debit') {
               acc.totalDebits += parseFloat(tx.amount);
               acc.debitCount++;
             }
@@ -416,12 +417,12 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">Total Credits</p>
-                    <p className="text-2xl font-bold text-green-400">
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-400">
                       ${summaryStats.totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </p>
                     <p className="text-xs text-muted-foreground">{summaryStats.creditCount} transactions</p>
                   </div>
-                  <TrendingUp className="h-8 w-8 text-green-400" />
+                  <TrendingUp className="h-8 w-8 text-green-700 dark:text-green-400" />
                 </div>
               </CardContent>
             </Card>
@@ -431,12 +432,12 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">Total Debits</p>
-                    <p className="text-2xl font-bold text-red-400">
+                    <p className="text-2xl font-bold text-red-700 dark:text-red-400">
                       ${summaryStats.totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </p>
                     <p className="text-xs text-muted-foreground">{summaryStats.debitCount} transactions</p>
                   </div>
-                  <TrendingDown className="h-8 w-8 text-red-400" />
+                  <TrendingDown className="h-8 w-8 text-red-700 dark:text-red-400" />
                 </div>
               </CardContent>
             </Card>
@@ -446,12 +447,12 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">Total Fees</p>
-                    <p className="text-2xl font-bold text-yellow-400">
+                    <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">
                       ${summaryStats.totalFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </p>
                     <p className="text-xs text-muted-foreground">{summaryStats.feeCount} fees</p>
                   </div>
-                  <DollarSign className="h-8 w-8 text-yellow-400" />
+                  <DollarSign className="h-8 w-8 text-yellow-700 dark:text-yellow-400" />
                 </div>
               </CardContent>
             </Card>
@@ -461,14 +462,14 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">Net Amount</p>
-                    <p className={`text-2xl font-bold ${summaryStats.netAmount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    <p className={`text-2xl font-bold ${summaryStats.netAmount >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
                       ${Math.abs(summaryStats.netAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {filteredAndSortedTransactions.length} total transactions
                     </p>
                   </div>
-                  <FileText className="h-8 w-8 text-blue-400" />
+                  <FileText className="h-8 w-8 text-blue-700 dark:text-blue-400" />
                 </div>
               </CardContent>
             </Card>
@@ -584,7 +585,7 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                   <table className="w-full">
                     <thead className="bg-slate-700/50">
                       <tr>
-                        <th className="px-6 py-4 text-left text-sm font-medium text-slate-300">
+                        <th className="px-6 py-4 text-left text-sm font-medium text-slate-800 dark:text-slate-300">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -597,7 +598,7 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                             )}
                           </Button>
                         </th>
-                        <th className="px-6 py-4 text-left text-sm font-medium text-slate-300">
+                        <th className="px-6 py-4 text-left text-sm font-medium text-slate-800 dark:text-slate-300">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -610,7 +611,7 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                             )}
                           </Button>
                         </th>
-                        <th className="px-6 py-4 text-left text-sm font-medium text-slate-300">
+                        <th className="px-6 py-4 text-left text-sm font-medium text-slate-800 dark:text-slate-300">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -623,8 +624,8 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                             )}
                           </Button>
                         </th>
-                        <th className="px-6 py-4 text-left text-sm font-medium text-slate-300">Description</th>
-                        <th className="px-6 py-4 text-right text-sm font-medium text-slate-300">
+                        <th className="px-6 py-4 text-left text-sm font-medium text-slate-800 dark:text-slate-300">Description</th>
+                        <th className="px-6 py-4 text-right text-sm font-medium text-slate-800 dark:text-slate-300">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -638,10 +639,10 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
                           </Button>
                         </th>
                         {effectiveRunningBalances && (
-                          <th className="px-6 py-4 text-right text-sm font-medium text-slate-300">Balance</th>
+                          <th className="px-6 py-4 text-right text-sm font-medium text-slate-800 dark:text-slate-300">Balance</th>
                         )}
-                        <th className="px-6 py-4 text-center text-sm font-medium text-slate-300">Status</th>
-                        <th className="px-6 py-4 text-right text-sm font-medium text-slate-300">Actions</th>
+                        <th className="px-6 py-4 text-center text-sm font-medium text-slate-800 dark:text-slate-300">Status</th>
+                        <th className="px-6 py-4 text-right text-sm font-medium text-slate-800 dark:text-slate-300">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700/50">
@@ -696,7 +697,7 @@ const TransactionsList = ({ transactions, customers, onVoid, runningBalances }) 
           <AlertDialog open={!!voidingTransaction} onOpenChange={(open) => !open && setVoidingTransaction(null)}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="text-yellow-400" />Confirm Void Transaction</AlertDialogTitle>
+                <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="text-yellow-700 dark:text-yellow-400" />Confirm Void Transaction</AlertDialogTitle>
                 <AlertDialogDescription>
                   Are you sure you want to void this transaction? This will reverse the balance change for the customer and cannot be undone.
                 </AlertDialogDescription>

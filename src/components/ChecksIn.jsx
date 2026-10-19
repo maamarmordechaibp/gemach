@@ -58,89 +58,13 @@
         }
 
         try {
-          const balanceAdjustment = parseFloat(bounceCheck.amount) + fee;
-          const newBalance = parseFloat(customer.balance) - balanceAdjustment;
-
-          await supabase.from('customers').update({ balance: newBalance }).eq('id', customer.id);
-          
-          const { error: checkError } = await supabase.from('checks_in').update({ status: 'bounced' }).eq('id', bounceCheck.id);
-          if (checkError) throw checkError;
-
-          // Mark the original transaction as bounced
-          if (bounceCheck.transaction_id) {
-            const { error: txError } = await supabase.from('transactions').update({ status: 'bounced' }).eq('id', bounceCheck.transaction_id);
-            if (txError) throw txError;
-          }
-
-          // Create a debit transaction for the bounced check reversal
-          const bounceTxId = `BOUNCE-REVERSAL-${Date.now()}`;
-          const checkNum = bounceCheck.check_number || 'N/A';
-          const bounceAmount = parseFloat(bounceCheck.amount);
-          const bounceMemo = `Bounced Check Reversal #${checkNum} - ${customer.first_name} ${customer.last_name}`;
-          
-          console.log(`Debug - Creating bounced check reversal transaction: ${bounceTxId} for $${bounceAmount}`);
-          const { error: bounceDebitError } = await supabase.from('transactions').insert({
-              id: bounceTxId,
-              account_number: customer.account_number,
-              type: 'debit',
-              amount: bounceAmount,
-              date: new Date().toISOString(),
-              status: 'completed',
-              memo: bounceMemo,
-              debit_details: {
-                  reversal_type: 'bounced_check',
-                  check_number: checkNum,
-                  customer_name: `${customer.first_name} ${customer.last_name}`,
-                  original_transaction_id: bounceCheck.transaction_id || null,
-                  original_check_id: bounceCheck.id,
-                  timestamp: new Date().toISOString()
-              }
+          // Atomic: marks the check + original deposit bounced, adds the reversal
+          // debit and optional fee, and adjusts the balance in one DB transaction.
+          const { error } = await supabase.rpc('bounce_check', {
+            p_check_id: bounceCheck.id,
+            p_fee: fee,
           });
-          
-          if (bounceDebitError) {
-              console.error('Error creating bounced check reversal transaction:', bounceDebitError);
-              throw bounceDebitError;
-          }
-          
-          console.log(`Debug - Created bounced check reversal transaction for $${bounceAmount}`);
-
-          // Create the bounced check fee transaction
-          if (fee > 0) {
-            const feeTxId = `FEE-BOUNCE-${Date.now()}`;
-            const feeMemo = `Bounced check fee for check #${checkNum} from ${customer.first_name} ${customer.last_name}`;
-            console.log(`Debug - Creating bounced check fee transaction: ${feeTxId} for $${fee}`);
-            const { error: feeError } = await supabase.from('transactions').insert({
-                id: feeTxId,
-                account_number: customer.account_number,
-                type: 'fee',
-                amount: fee,
-                date: new Date().toISOString(),
-                status: 'completed',
-                memo: feeMemo,
-                fee_details: { 
-                    reason: feeMemo, 
-                    from_account: customer.account_number, 
-                    from_customer: `${customer.first_name} ${customer.last_name}`,
-                    check_number: checkNum,
-                    fee_type: 'bounced_check',
-                    check_amount: bounceCheck.amount || null,
-                    original_transaction_id: bounceCheck.transaction_id || null,
-                    timestamp: new Date().toISOString()
-                }
-            });
-            if (feeError) throw feeError;
-
-            // Add the fee to the FEES account
-            console.log(`Debug - Adding bounced check fee of $${fee} to FEES account`);
-            const { error: feeAccountError } = await supabase.rpc('execute_sql', {
-                sql: `UPDATE customers SET balance = balance + ${fee} WHERE account_number = 'FEES';`
-            });
-            if (feeAccountError) {
-                console.error('Error updating FEES account:', feeAccountError);
-                throw new Error('Failed to add fee to FEES account');
-            }
-            console.log(`Debug - Successfully added $${fee} to FEES account for bounced check`);
-          }
+          if (error) throw error;
 
           toast({ title: "Success", description: "Check bounced and balance adjusted." });
           refreshData();

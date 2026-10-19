@@ -25,10 +25,15 @@
             let from = 0;
             let allRows = [];
             while (true) {
+              // `id` breaks ties: many rows share the exact same `date` (every row of
+              // one transaction uses now()), and without a unique tie-breaker Postgres
+              // may order ties differently per page — duplicating some rows and
+              // skipping others, which throws off totals and running balances.
               const { data, error } = await supabase
                 .from(table)
                 .select('*')
                 .order('date', { ascending: false })
+                .order('id', { ascending: false })
                 .range(from, from + pageSize - 1);
               if (error) return { data: null, error };
               if (data && data.length > 0) allRows = allRows.concat(data);

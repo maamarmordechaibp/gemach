@@ -12,6 +12,7 @@ import RepaymentDialog from './add-transaction/RepaymentDialog';
 import AdminPasswordDialog from './AdminPasswordDialog';
 import DonationModal from '@/components/DonationModal';
 import { useTransactionLogic } from '@/hooks/useTransactionLogic';
+import { printTransactionReceipt } from '@/lib/transactionReceipt';
 import { supabase } from '@/lib/customSupabaseClient';
 import { toast } from '@/components/ui/use-toast';
 import { formatCurrency } from '@/lib/utils';
@@ -22,8 +23,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { MinusCircle, PlusCircle, ArrowRightLeft, Loader2 } from 'lucide-react';
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import FeeWaivers from './add-transaction/FeeWaivers';
 
 // Outstanding balance for a loan. Prefers the explicit remaining_balance column,
 // falling back to `amount` for records created before the column existed.
@@ -36,61 +36,19 @@ const AddTransaction = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   
-  const printReceipt = (custName, acctNum, creditAmt, debitAmt, feeAmt, transferAmt, newBalance) => {
-    const companyInfo = settings?.check_config || {};
-    const now = new Date();
-    const receiptHtml = `<!DOCTYPE html><html><head><title>Receipt</title>
-<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:monospace;padding:20px;width:3in;color:#000;background:#fff;font-size:11px;}
-.center{text-align:center;}.line{border-bottom:1px dashed #000;margin:8px 0;}.row{display:flex;justify-content:space-between;padding:2px 0;}
-.bold{font-weight:bold;}.big{font-size:16px;}.mt{margin-top:8px;}@media print{body{padding:5px;margin:0;}}</style>
-</head><body>
-<div class="center">${companyInfo.name ? `<div class="bold big">${companyInfo.name}</div>` : ''}
-${companyInfo.address1 ? `<div>${companyInfo.address1}</div>` : ''}${companyInfo.phone_number ? `<div>${companyInfo.phone_number}</div>` : ''}
-</div>
-<div class="line"></div>
-<div class="center bold">TRANSACTION RECEIPT</div>
-<div class="center">${now.toLocaleDateString()} ${now.toLocaleTimeString()}</div>
-<div class="line"></div>
-<div class="row bold"><span>Customer:</span><span>${custName}</span></div>
-<div class="row"><span>Account:</span><span>${acctNum}</span></div>
-<div class="line"></div>
-${creditAmt > 0 ? `<div class="row"><span>Credit/Deposit:</span><span>+$${formatCurrency(creditAmt)}</span></div>` : ''}
-${debitAmt > 0 ? `<div class="row"><span>Debit/Withdrawal:</span><span>-$${formatCurrency(debitAmt)}</span></div>` : ''}
-${feeAmt > 0 ? `<div class="row"><span>Fees:</span><span>-$${formatCurrency(feeAmt)}</span></div>` : ''}
-${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${formatCurrency(transferAmt)}</span></div>` : ''}
-<div class="line"></div>
-<div class="row bold big"><span>Balance:</span><span>$${formatCurrency(newBalance)}</span></div>
-<div class="line"></div>
-<div class="center mt">Thank you!</div>
-</body></html>`;
-    const w = window.open('', '_blank', 'width=350,height=500');
-    if (!w) return;
-    w.document.write(receiptHtml);
-    w.document.close();
-    setTimeout(() => { w.focus(); w.print(); setTimeout(() => w.close(), 1000); }, 400);
-  };
-
   const {
     transactionState,
     setTransactionState,
     transactionFee,
+    feeBreakdown,
     totalDebit,
     totalCredit,
     totalTransfer,
     handleSubmit,
     resetState,
     isProcessing,
-  } = useTransactionLogic(selectedCustomer, () => {
-    if (selectedCustomer) {
-      const fee = transactionState?.applyFee ? transactionFee : 0;
-      const transferAmt = totalTransfer;
-      const newBalance = (parseFloat(selectedCustomer.balance) || 0) + totalCredit - totalDebit - fee - transferAmt;
-      printReceipt(
-        `${selectedCustomer.first_name} ${selectedCustomer.last_name}`,
-        selectedCustomer.account_number,
-        totalCredit, totalDebit, fee, transferAmt, newBalance
-      );
-    }
+  } = useTransactionLogic(selectedCustomer, ({ receipt } = {}) => {
+    printTransactionReceipt(receipt, settings);
     handleFullReset();
   });
   
@@ -252,7 +210,8 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
 
       // 3. Split the original cash deposit into a repayment row per loan plus any
       // leftover that stayed in the account, so the log shows the full breakdown.
-      const cashTxId = (depositTxIds || []).find(id => id.startsWith('CREDIT-CASH-'));
+      const cashTxId = (depositTxIds || []).find(id => id.startsWith('CREDIT-CASH-'))
+        || (depositTxIds || []).find(id => /^CREDIT-(QUICKPAY|DIRECT|OTHER)-/.test(id));
       if (cashTxId && totalPayment > 0) {
         const { data: dep, error: depErr } = await supabase
           .from('transactions')
@@ -319,7 +278,7 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
     }
   };
 
-  const handleRepaymentConfirm = async (applyToLoan, applyAmount = 0) => {
+  const handleRepaymentConfirm = async (applyToLoan, applyAmount = 0, selectedLoanIds = null) => {
     const prompt = repaymentPrompt;
     // The credit/transfer is added to the balance by process_transaction_v2.
     // When applying to loans we additionally reduce the loan records by the
@@ -332,6 +291,7 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
     if (result?.success && applyToLoan && promptLoans.length && applyAmount > 0) {
       const sorted = promptLoans
         .filter(l => loanRemaining(l) > 0 && l.status !== 'paid')
+        .filter(l => !selectedLoanIds || selectedLoanIds.includes(l.id))
         .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
       let remaining = applyAmount;
       const allocations = sorted.map(l => {
@@ -387,14 +347,11 @@ ${transferAmt > 0 ? `<div class="row"><span>Transfer Out:</span><span>-$${format
         </Card>
 
         <div className="bg-card/50 border border-border rounded-xl p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="flex items-center space-x-2">
-              <Switch 
-                  id="apply-fee" 
-                  checked={transactionState.applyFee} 
-                  onCheckedChange={(checked) => setTransactionState(prev => ({...prev, applyFee: checked}))}
-              />
-              <Label htmlFor="apply-fee" className="text-lg">Apply Transaction Fees</Label>
-          </div>
+          <FeeWaivers
+              transactionState={transactionState}
+              setTransactionState={setTransactionState}
+              feeBreakdown={feeBreakdown || []}
+          />
           <TransactionSummary 
               totalCredit={totalCredit} 
               totalDebit={totalDebit} 

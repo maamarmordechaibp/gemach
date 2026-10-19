@@ -2,7 +2,7 @@
     import React, { useState, useEffect, useCallback } from 'react';
     import { Button } from '@/components/ui/button';
     import { Input } from '@/components/ui/input';
-    import { Plus, Trash2, Banknote, Landmark, ShieldCheck } from 'lucide-react';
+    import { Plus, Trash2, Banknote, Landmark, ShieldCheck, Smartphone } from 'lucide-react';
     import { Checkbox } from '@/components/ui/checkbox';
     import { Label } from '@/components/ui/label';
     import { Switch } from '@/components/ui/switch';
@@ -20,7 +20,13 @@
     } from "@/components/ui/alert-dialog";
     import CreatableSelect from '@/components/ui/creatable-select';
 
-    const CreditForm = ({ creditCash, creditChecks, onInputChange, onListChange, customerId }) => {
+    const OTHER_DEPOSIT_METHODS = [
+      { value: 'quickpay', label: 'QuickPay' },
+      { value: 'direct_deposit', label: 'Direct Deposit' },
+      { value: 'other', label: 'Other' },
+    ];
+
+    const CreditForm = ({ creditCash, creditChecks, creditOther = [], onInputChange, onListChange, customerId }) => {
       const [showHoldPrompt, setShowHoldPrompt] = useState(null); // stores index
       const [holdTags, setHoldTags] = useState([]);
       const [tagOptions, setTagOptions] = useState([]);
@@ -84,6 +90,19 @@
       const removeCheckEntry = (index) => {
         const updated = creditChecks.filter((_, i) => i !== index);
         onListChange('creditChecks', updated);
+      };
+
+      const handleOtherChange = (index, field, value) => {
+        const updated = creditOther.map((entry, i) => (i === index ? { ...entry, [field]: value } : entry));
+        onListChange('creditOther', updated);
+      };
+
+      const addOtherEntry = () => {
+        onListChange('creditOther', [...creditOther, { method: 'quickpay', amount: '', note: '' }]);
+      };
+
+      const removeOtherEntry = (index) => {
+        onListChange('creditOther', creditOther.filter((_, i) => i !== index));
       };
 
       const handleHoldConfirm = () => {
@@ -167,6 +186,51 @@
               ))}
               <Button variant="outline" size="sm" onClick={addCheckEntry}>
                 <Plus className="h-4 w-4 mr-2" /> Add Check to Deposit
+              </Button>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2"><Smartphone className="h-5 w-5 text-green-400" /> QuickPay / Direct Deposit / Other</h4>
+            <div className="space-y-4">
+              {creditOther.map((entry, index) => (
+                <div key={index} className="bg-secondary/50 p-4 rounded-lg space-y-3">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-grow space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        {OTHER_DEPOSIT_METHODS.map(m => (
+                          <Button
+                            key={m.value}
+                            type="button"
+                            size="sm"
+                            variant={entry.method === m.value ? 'default' : 'outline'}
+                            onClick={() => handleOtherChange(index, 'method', m.value)}
+                          >
+                            {m.label}
+                          </Button>
+                        ))}
+                      </div>
+                      <Input
+                        type="number"
+                        placeholder="Amount"
+                        value={entry.amount}
+                        onChange={(e) => handleOtherChange(index, 'amount', e.target.value)}
+                      />
+                      <Input
+                        type="text"
+                        placeholder={entry.method === 'other' ? 'Describe (e.g. Wire, Zelle, PayPal)' : 'Reference / from whom (optional)'}
+                        value={entry.note}
+                        onChange={(e) => handleOtherChange(index, 'note', e.target.value)}
+                      />
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => removeOtherEntry(index)}>
+                      <Trash2 className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={addOtherEntry}>
+                <Plus className="h-4 w-4 mr-2" /> Add QuickPay / Direct Deposit / Other
               </Button>
             </div>
           </div>

@@ -312,7 +312,7 @@ const TransactionsList = ({ transactions, customers, onVoid }) => {
         </thead>
         <tbody className="divide-y divide-border">
           {transactions.map((tx) => {
-              const isCredit = tx.type === 'credit' && tx.status !== 'bounced';
+              const isCredit = tx.type === 'credit';
               const isFee = tx.type === 'fee';
               
               return (

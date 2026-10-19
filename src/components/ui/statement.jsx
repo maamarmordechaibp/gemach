@@ -2,10 +2,11 @@ import React, { useMemo } from 'react';
 import { formatCurrency } from '@/lib/utils';
 
 // Signed effect a single transaction has on a customer's balance.
+// A bounced deposit still counts: its "Bounced Check Reversal" debit offsets it.
 const signedEffect = (tx) => {
     if (tx.status === 'voided') return 0;
     const amt = parseFloat(tx.amount) || 0;
-    if (tx.type === 'credit' && tx.status !== 'bounced') return amt;
+    if (tx.type === 'credit') return amt;
     if (tx.type === 'transfer') {
         const memo = (tx.memo || '').toLowerCase();
         return memo.includes('from') ? amt : -amt;

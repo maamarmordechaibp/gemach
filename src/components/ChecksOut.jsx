@@ -255,9 +255,9 @@ const ChecksOut = () => {
         const date = new Date(checkData.date).toLocaleDateString();
         const micrRouting = config.routing_number || '123456789';
         const micrAccount = config.account_number || '1122334455';
-        // MICR line: check number (no wrapping symbols), routing wrapped in transit
-        // symbols (⑆), and account followed by the on-us symbol (⑈).
-        const micrLine = `${checkNumber}  \u2446${micrRouting}\u2446  ${micrAccount}\u2448`;
+        // MICR line: check number wrapped in on-us symbols (⑈), routing wrapped in
+        // transit symbols (⑆), and account followed by the on-us symbol (⑈).
+        const micrLine = `\u2448${checkNumber}\u2448  \u2446${micrRouting}\u2446  ${micrAccount}\u2448`;
 
         return `
             <div class="check-container">
@@ -380,7 +380,7 @@ body { background: white; margin: 0; padding: 0; font-family: 'Roboto', Arial, s
 .signature-label { font-size: 7.5pt; color: #555; text-align: right; width: 100%; max-width: 2.8in; }
 
 /* MICR line - bottom of check */
-.micr-line { position: absolute; bottom: 0.2in; left: 0.6in; right: 0.5in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', 'Courier New', monospace; font-size: 10pt; letter-spacing: 2px; color: #000; line-height: 1; font-weight: 500; }
+.micr-line { position: absolute; bottom: 0.35in; left: 0.6in; right: 0.5in; font-family: ${fontUrl ? "'customMicrFont', " : ""}'Roboto Mono', 'Courier New', monospace; font-size: 10pt; letter-spacing: 2px; color: #000; line-height: 1; font-weight: 500; }
 
 @media print {
   html, body { background: white; margin: 0; padding: 0; }

@@ -25,7 +25,7 @@
     const signedEffect = (tx) => {
         if (tx.status === 'voided') return 0;
         const amt = parseFloat(tx.amount) || 0;
-        if (tx.type === 'credit' && tx.status !== 'bounced') return amt;
+        if (tx.type === 'credit') return amt;
         if (tx.type === 'transfer') {
             const memo = (tx.memo || '').toLowerCase();
             return memo.includes('from') ? amt : -amt;

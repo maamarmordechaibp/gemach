@@ -35,7 +35,7 @@ SELECT
     COALESCE(SUM(
         CASE
             WHEN t.status = 'voided' THEN 0
-            WHEN t.type = 'credit' AND t.status <> 'bounced' THEN  t.amount
+            WHEN t.type = 'credit' THEN  t.amount
             WHEN t.type = 'transfer' THEN 0            -- reviewed separately
             ELSE -t.amount
         END
@@ -43,7 +43,7 @@ SELECT
     c.balance - COALESCE(SUM(
         CASE
             WHEN t.status = 'voided' THEN 0
-            WHEN t.type = 'credit' AND t.status <> 'bounced' THEN  t.amount
+            WHEN t.type = 'credit' THEN  t.amount
             WHEN t.type = 'transfer' THEN 0
             ELSE -t.amount
         END
@@ -55,7 +55,7 @@ HAVING ABS(
     c.balance - COALESCE(SUM(
         CASE
             WHEN t.status = 'voided' THEN 0
-            WHEN t.type = 'credit' AND t.status <> 'bounced' THEN  t.amount
+            WHEN t.type = 'credit' THEN  t.amount
             WHEN t.type = 'transfer' THEN 0
             ELSE -t.amount
         END
@@ -65,7 +65,7 @@ ORDER BY ABS(
     c.balance - COALESCE(SUM(
         CASE
             WHEN t.status = 'voided' THEN 0
-            WHEN t.type = 'credit' AND t.status <> 'bounced' THEN  t.amount
+            WHEN t.type = 'credit' THEN  t.amount
             WHEN t.type = 'transfer' THEN 0
             ELSE -t.amount
         END

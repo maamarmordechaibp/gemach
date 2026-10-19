@@ -21,22 +21,22 @@ const TransactionSummary = ({
       <div className="flex gap-4 sm:gap-6 items-center flex-wrap">
         <div className="text-center">
           <p className="text-muted-foreground text-sm">Total Credit</p>
-          <p className="text-2xl font-bold text-green-400">${totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <p className="text-2xl font-bold text-green-700 dark:text-green-400">${totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         </div>
         <div className="text-center">
           <p className="text-muted-foreground text-sm">Total Debit</p>
-          <p className="text-2xl font-bold text-red-400">${totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <p className="text-2xl font-bold text-red-700 dark:text-red-400">${totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         </div>
         {transactionFee > 0 && (
           <div className="text-center pl-4 border-l border-border">
             <p className="text-muted-foreground text-sm">Fee</p>
-            <p className="text-lg font-bold text-yellow-400">${transactionFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-lg font-bold text-yellow-700 dark:text-yellow-400">${transactionFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
         )}
         {remainingBalance !== null && (totalCredit > 0 || totalDebit > 0) && (
           <div className="text-center pl-4 border-l-2 border-primary">
             <p className="text-muted-foreground text-sm">Remaining Balance</p>
-            <p className={`text-2xl font-bold ${remainingBalance >= 0 ? 'text-blue-400' : 'text-red-500'}`}>
+            <p className={`text-2xl font-bold ${remainingBalance >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-red-700 dark:text-red-500'}`}>
               ${remainingBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           </div>

@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, Plus, Trash2 } from 'lucide-react';
 
-const emptyTransfer = () => ({ toAccount: '', amount: '' });
+const emptyTransfer = () => ({ toAccount: '', amount: '', note: '' });
 
 const TransferRow = ({ index, transfer, customers, canRemove, onChange, onRemove }) => {
     const [recipientSearchTerm, setRecipientSearchTerm] = useState('');
@@ -92,6 +92,17 @@ const TransferRow = ({ index, transfer, customers, canRemove, onChange, onRemove
                         )}
                     </div>
                 )}
+            </div>
+
+            <div>
+                <label className="text-sm font-medium text-muted-foreground">Note (shown to both sender and recipient)</label>
+                <Input
+                    type="text"
+                    placeholder="Why is this transfer being made?"
+                    value={transfer.note || ''}
+                    onChange={(e) => onChange(index, { note: e.target.value })}
+                    className="w-full bg-input border border-border rounded-lg p-2 text-foreground mt-1"
+                />
             </div>
         </div>
     );

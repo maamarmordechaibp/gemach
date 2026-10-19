@@ -25,6 +25,7 @@
               <CreditForm
                 creditCash={transactionState.creditCash}
                 creditChecks={transactionState.creditChecks}
+                creditOther={transactionState.creditOther || []}
                 onInputChange={handleInputChange}
                 onListChange={handleListChange}
                 customerId={customer?.id}
