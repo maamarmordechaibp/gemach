@@ -131,8 +131,15 @@ const AddTransaction = () => {
       return;
     }
 
-    if (totalCredit > 0 && customerLoans.length > 0) {
-      setRepaymentPrompt({ show: true, loans: customerLoans, recipient: null, isTransfer: false, amount: totalCredit });
+    // Only what's left after this transaction's own withdrawals, fees and
+    // transfers can go toward a loan (e.g. deposit $1,000, withdraw $500 -> offer $500).
+    // Checks on hold aren't in the balance yet, so they don't count either.
+    const heldCredit = (transactionState.creditChecks || [])
+      .filter(c => c.isOnHold)
+      .reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+    const availableForLoans = Math.round(Math.max(0, totalCredit - heldCredit - netDebit) * 100) / 100;
+    if (availableForLoans > 0 && customerLoans.length > 0) {
+      setRepaymentPrompt({ show: true, loans: customerLoans, recipient: null, isTransfer: false, amount: availableForLoans });
       return;
     }
 
