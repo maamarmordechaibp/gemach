@@ -32,9 +32,13 @@ const BulkDepositModal = ({ isOpen, onClose, checks, onBulkUpdate, tableName = '
     }
     setIsProcessing(true);
     try {
+      // A batch id + date lets the daily bank feed match this deposit's total.
+      const update = tableName === 'checks_in'
+        ? { status: 'deposited', deposit_batch_id: crypto.randomUUID(), deposited_at: new Date().toISOString() }
+        : { status: 'deposited' };
       const { error } = await supabase
         .from(tableName)
-        .update({ status: 'deposited' })
+        .update(update)
         .in('id', selectedChecks);
 
       if (error) throw error;

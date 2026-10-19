@@ -1,7 +1,7 @@
 
     import React, { useState, useEffect } from 'react';
         import { motion } from 'framer-motion';
-        import { Settings as SettingsIcon, Palette, Users, FileText, Package, DollarSign, FileSignature, AlertCircle } from 'lucide-react';
+        import { Settings as SettingsIcon, Palette, Users, FileText, Package, DollarSign, FileSignature, AlertCircle, Landmark } from 'lucide-react';
         import { useAuth } from '@/contexts/SupabaseAuthContext';
         import ThemeSettings from '@/components/settings/ThemeSettings';
         import UserManagement from '@/components/settings/UserManagement';
@@ -10,6 +10,7 @@
         import TransactionFees from '@/components/settings/TransactionFees';
         import TemplateManager from '@/components/settings/TemplateManager';
         import HoldSettings from '@/components/settings/HoldSettings';
+        import BankConnection from '@/components/settings/BankConnection';
         import { Loader2 } from 'lucide-react';
 
         const Settings = () => {
@@ -61,6 +62,13 @@
                         <DollarSign className="h-5 w-5 text-primary" /> Transaction Fees
                     </h2>
                     <TransactionFees />
+                  </motion.div>
+
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card/50 border border-border rounded-xl p-8 space-y-6">
+                    <h2 className="text-xl font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
+                        <Landmark className="h-5 w-5 text-primary" /> Bank Connection
+                    </h2>
+                    <BankConnection />
                   </motion.div>
 
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card/50 border border-border rounded-xl p-8 space-y-6">

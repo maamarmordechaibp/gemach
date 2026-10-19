@@ -1,7 +1,7 @@
 
-    import React, { useState, useMemo } from 'react';
+    import React, { useState, useMemo, useEffect } from 'react';
     import { motion } from 'framer-motion';
-    import { Clock, CheckCircle, XCircle, AlertTriangle, Search, Banknote, Inbox, Loader2, ShieldCheck, Lock } from 'lucide-react';
+    import { Clock, CheckCircle, XCircle, AlertTriangle, Search, Banknote, Inbox, Loader2, ShieldCheck, Lock, Landmark } from 'lucide-react';
     import { Button } from '@/components/ui/button';
     import { toast } from '@/components/ui/use-toast';
     import { useData } from '@/contexts/DataContext';
@@ -10,6 +10,7 @@
     import BulkDepositModal from '@/components/BulkDepositModal';
     import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
     import ChecksOnHold from '@/components/checks-in/ChecksOnHold';
+    import BankActivity from '@/components/checks-in/BankActivity';
     import {
       AlertDialog,
       AlertDialogAction,
@@ -27,12 +28,20 @@
       const [bounceFee, setBounceFee] = useState('');
       const [searchTerm, setSearchTerm] = useState('');
       const [isBulkDepositOpen, setIsBulkDepositOpen] = useState(false);
+      const [bankReviewCount, setBankReviewCount] = useState(0);
+
+      useEffect(() => {
+        supabase.rpc('plaid_status').then(({ data }) => setBankReviewCount(Number(data?.needs_review) || 0));
+      }, [checksIn]);
 
       const feeSettings = useMemo(() => settings?.transaction_fees?.bounced_check || {}, [settings]);
 
       const handleStatusChange = async (checkId, newStatus) => {
         try {
-          const { error } = await supabase.from('checks_in').update({ status: newStatus }).eq('id', checkId);
+          const update = newStatus === 'deposited'
+            ? { status: newStatus, deposit_batch_id: crypto.randomUUID(), deposited_at: new Date().toISOString() }
+            : { status: newStatus };
+          const { error } = await supabase.from('checks_in').update(update).eq('id', checkId);
           if (error) throw error;
           toast({ title: "Success", description: `Check status updated to ${newStatus}.` });
           refreshData();
@@ -133,10 +142,19 @@
             </div>
           </div>
           <Tabs defaultValue="regularChecks" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="regularChecks">All Checks</TabsTrigger>
               <TabsTrigger value="onHold"><Lock className="mr-2 h-4 w-4"/>Checks on Hold</TabsTrigger>
+              <TabsTrigger value="bank">
+                <Landmark className="mr-2 h-4 w-4"/>Bank
+                {bankReviewCount > 0 && (
+                  <span className="ml-2 rounded-full bg-orange-500 px-2 text-xs font-bold text-white">{bankReviewCount}</span>
+                )}
+              </TabsTrigger>
             </TabsList>
+            <TabsContent value="bank">
+              <BankActivity />
+            </TabsContent>
             <TabsContent value="regularChecks">
               <motion.div
                 className="bg-card backdrop-blur-xl border border-border rounded-xl overflow-hidden mt-4"
