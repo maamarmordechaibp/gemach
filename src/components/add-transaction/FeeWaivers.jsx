@@ -7,8 +7,11 @@ import { formatCurrency } from '@/lib/utils';
 // Master "apply fees" switch plus a per-fee-type waiver (cash fee, check fee, ...).
 // The fee types listed come from calculate_fee_v2's breakdown, so only fees that
 // actually apply to the current transaction are shown.
-const FeeWaivers = ({ transactionState, setTransactionState, feeBreakdown }) => {
+const FeeWaivers = ({ transactionState, setTransactionState, feeBreakdown, cashCredit = 0 }) => {
   const waived = transactionState.waivedFees || [];
+  const chargeable = feeBreakdown.filter(f => (Number(f.amount) || 0) > 0);
+  const cashCovered = Number(feeBreakdown.find(f => f.type === 'cash_debit')?.covered) || 0;
+  const depositingCash = parseFloat(transactionState.creditCash) || 0;
 
   const toggleWaive = (type, checked) => {
     setTransactionState(prev => {
@@ -29,9 +32,17 @@ const FeeWaivers = ({ transactionState, setTransactionState, feeBreakdown }) => 
         <Label htmlFor="apply-fee" className="text-lg">Apply Transaction Fees</Label>
       </div>
 
-      {transactionState.applyFee && feeBreakdown.length > 0 && (
+      {(cashCredit > 0 || depositingCash > 0) && (
+        <p className="text-sm text-muted-foreground">
+          Fee-free cash available: <span className="font-semibold text-green-700 dark:text-green-400">${formatCurrency(cashCredit + depositingCash)}</span>
+          {depositingCash > 0 && cashCredit > 0 ? ' (incl. this deposit)' : depositingCash > 0 ? ' (from this deposit)' : ''}
+          {cashCovered > 0 && <> · ${formatCurrency(cashCovered)} of this withdrawal is fee-free</>}
+        </p>
+      )}
+
+      {transactionState.applyFee && chargeable.length > 0 && (
         <div className="space-y-2 pl-1">
-          {feeBreakdown.map(f => (
+          {chargeable.map(f => (
             <div key={f.type} className="flex items-center gap-3 text-sm">
               <Checkbox
                 id={`waive-${f.type}`}

@@ -19,6 +19,10 @@ const defaultFees = {
             mode: 'always', 
             threshold_amount: 0,
             period_days: 30
+        },
+        cash_deposit_credit: {
+            enabled: true,
+            days: 365
         }
     },
     check_debit: {
@@ -92,7 +96,7 @@ const TransactionFees = () => {
             const mergedFees = {
                 ...defaultFees,
                 ...currentFees,
-                cash_debit: { ...defaultFees.cash_debit, ...(currentFees.cash_debit || {}), waiver: {...defaultFees.cash_debit.waiver, ...currentFees.cash_debit?.waiver} },
+                cash_debit: { ...defaultFees.cash_debit, ...(currentFees.cash_debit || {}), waiver: {...defaultFees.cash_debit.waiver, ...currentFees.cash_debit?.waiver}, cash_deposit_credit: { ...defaultFees.cash_debit.cash_deposit_credit, ...currentFees.cash_debit?.cash_deposit_credit } },
                 check_debit: { ...defaultFees.check_debit, ...(currentFees.check_debit || {}) },
                 check_credit_missing_account_number: { ...defaultFees.check_credit_missing_account_number, ...(currentFees.check_credit_missing_account_number || {}) },
                 check_reprint: { ...defaultFees.check_reprint, ...(currentFees.check_reprint || {}) },
@@ -211,6 +215,19 @@ const TransactionFees = () => {
                                         <span>$</span>
                                     </div>
                                 )}
+                                <div className="flex flex-col gap-2 p-2 bg-background/50 rounded-md text-sm">
+                                    <div className="flex items-center space-x-2">
+                                        <Switch id="cash-deposit-credit" checked={fees.cash_debit.cash_deposit_credit.enabled} onCheckedChange={(checked) => setFeeValue('cash_debit.cash_deposit_credit.enabled', checked)} />
+                                        <Label htmlFor="cash-deposit-credit">No fee on cash withdrawals up to the cash the customer deposited</Label>
+                                    </div>
+                                    {fees.cash_debit.cash_deposit_credit.enabled && (
+                                        <div className="flex items-center gap-2">
+                                            <span>Each cash deposit counts for</span>
+                                            <Input type="number" value={fees.cash_debit.cash_deposit_credit.days} onChange={(e) => setFeeValue('cash_debit.cash_deposit_credit.days', parseInt(e.target.value) || 0)} className="w-24" />
+                                            <span>days (not for RUSH cash)</span>
+                                        </div>
+                                    )}
+                                </div>
                             </>
                         )}
                     </SectionWrapper>

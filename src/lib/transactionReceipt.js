@@ -31,10 +31,14 @@ const categoryFee = (breakdown, type) => (breakdown || []).find(d => d.type === 
 
 const feeLine = (label, entry) => {
   if (!entry) return '';
-  return entry.waived ? sub(`${label} (waived)`, money(0)) : sub(label, `-${money(entry.amount)}`);
+  const covered = Number(entry.covered) || 0;
+  const coveredNote = covered > 0 ? `<div class="note">${money(covered)} covered by cash deposits (no fee)</div>` : '';
+  if (entry.waived) return sub(`${label} (waived)`, money(0)) + coveredNote;
+  if ((Number(entry.amount) || 0) === 0) return sub(`${label} (covered by cash deposits)`, money(0));
+  return sub(label, `-${money(entry.amount)}`) + coveredNote;
 };
 
-export const buildReceiptHtml = (receipt, settings, newBalance) => {
+export const buildReceiptHtml = (receipt, settings, newBalance, cashCreditLeft = null) => {
   const company = settings?.check_config || {};
   const now = new Date();
   const when = receipt.date ? new Date(receipt.date) : now;
@@ -152,6 +156,8 @@ ${receipt.loanAmount > 0 ? row('Loan', `+${money(receipt.loanAmount)}`) : ''}
 <div class="line"></div>
 ${newBalance != null ? `${row(receipt.reprint ? 'Balance after:' : 'Balance:', money(newBalance), 'bold big')}
 <div class="line"></div>` : ''}
+${cashCreditLeft != null ? `${row('Fee-free cash left:', money(cashCreditLeft))}<div class="note">Cash you deposit can be withdrawn without a cash fee</div>
+<div class="line"></div>` : ''}
 <div class="center mt">Thank you!</div>
 </body></html>`;
 };
@@ -172,14 +178,22 @@ export const printTransactionReceipt = async (receipt, settings) => {
   if (!w) return;
 
   let newBalance = estimateNewBalance(receipt);
+  let cashCreditLeft = null;
   try {
-    const { data } = await supabase.from('customers').select('balance').eq('id', receipt.customer.id).single();
+    const [{ data }, credit] = await Promise.all([
+      supabase.from('customers').select('balance').eq('id', receipt.customer.id).single(),
+      supabase.rpc('cash_credit_available', { p_account_number: receipt.customer.account_number }),
+    ]);
     if (data && data.balance != null) newBalance = parseFloat(data.balance);
+    const hadCash = receipt.creditCash > 0 || (receipt.debitCash || []).some(e => !e.isRush);
+    if (!credit?.error && credit?.data != null && (hadCash || parseFloat(credit.data) > 0)) {
+      cashCreditLeft = parseFloat(credit.data) || 0;
+    }
   } catch {
     // keep the estimate
   }
 
-  w.document.write(buildReceiptHtml(receipt, settings, newBalance));
+  w.document.write(buildReceiptHtml(receipt, settings, newBalance, cashCreditLeft));
   w.document.close();
   setTimeout(() => { w.focus(); w.print(); setTimeout(() => w.close(), 1000); }, 400);
 };

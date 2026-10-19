@@ -41,6 +41,7 @@ const AddTransaction = () => {
     setTransactionState,
     transactionFee,
     feeBreakdown,
+    cashCredit,
     totalDebit,
     totalCredit,
     totalTransfer,
@@ -362,6 +363,7 @@ const AddTransaction = () => {
               transactionState={transactionState}
               setTransactionState={setTransactionState}
               feeBreakdown={feeBreakdown || []}
+              cashCredit={cashCredit || 0}
           />
           <TransactionSummary 
               totalCredit={totalCredit} 

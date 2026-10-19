@@ -7,7 +7,7 @@ import { toast } from '@/components/ui/use-toast';
 export const positiveAmountRows = (items) => (items || []).filter(item => (parseFloat(item.amount) || 0) > 0);
 
 export const useTransactionFees = (feeSettings, transactionState) => {
-    const { debitCashEntries, debitChecks, creditChecks, selectedCustomer, applyFee, waivedFees } = transactionState || {};
+    const { debitCashEntries, debitChecks, creditChecks, selectedCustomer, applyFee, waivedFees, creditCash } = transactionState || {};
     const [transactionFee, setTransactionFee] = useState(0);
     const [feeMemo, setFeeMemo] = useState('');
     // [{ type, label, description, amount, waived, items: [{ index, fee }] }]
@@ -27,7 +27,8 @@ export const useTransactionFees = (feeSettings, transactionState) => {
                 p_debit_cash_entries: positiveAmountRows(debitCashEntries),
                 p_debit_checks: positiveAmountRows(debitChecks),
                 p_credit_checks: positiveAmountRows(creditChecks),
-                p_waived_fees: waivedFees || []
+                p_waived_fees: waivedFees || [],
+                p_cash_deposit: parseFloat(creditCash) || 0
             });
 
             if (error) throw error;
@@ -52,7 +53,7 @@ export const useTransactionFees = (feeSettings, transactionState) => {
             setFeeMemo('');
             setFeeBreakdown([]);
         }
-    }, [applyFee, feeSettings, debitCashEntries, debitChecks, creditChecks, selectedCustomer, transactionState, waivedFees]);
+    }, [applyFee, feeSettings, debitCashEntries, debitChecks, creditChecks, selectedCustomer, transactionState, waivedFees, creditCash]);
 
     useEffect(() => {
         calculateTransactionFee();

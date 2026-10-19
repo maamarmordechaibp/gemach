@@ -48,6 +48,15 @@
         setTransactionState(prev => (prev ? { ...prev, feeSettings: settings?.transaction_fees || {} } : prev));
       }, [settings]);
 
+      // Fee-free cash available from the customer's own cash deposits.
+      const [cashCredit, setCashCredit] = useState(0);
+      const loadCashCredit = useCallback(async () => {
+        if (!selectedCustomer?.account_number) { setCashCredit(0); return; }
+        const { data, error } = await supabase.rpc('cash_credit_available', { p_account_number: selectedCustomer.account_number });
+        setCashCredit(error ? 0 : (parseFloat(data) || 0));
+      }, [selectedCustomer?.account_number]);
+      useEffect(() => { loadCashCredit(); }, [loadCashCredit]);
+
       const { transactionFee, feeMemo, feeBreakdown } = useTransactionFees(
         transactionState?.feeSettings, 
         transactionState
@@ -237,6 +246,7 @@
             // Small delay to ensure the database commit is visible before refetching.
             setTimeout(() => {
                 refreshData();
+                loadCashCredit();
             }, 800);
 
             if (onSuccess) onSuccess({ transactionIds, receipt });
@@ -256,7 +266,8 @@
         feeBreakdown,
         customers,
         onSuccess, 
-        refreshData
+        refreshData,
+        loadCashCredit
       ]);
 
       return {
@@ -265,6 +276,7 @@
         transactionFee,
         feeMemo,
         feeBreakdown,
+        cashCredit,
         totalDebit,
         totalCredit,
         totalTransfer,
